@@ -83,7 +83,7 @@ const compressImage = (file, maxWidth = 1200, maxHeight = 1200, quality = 0.7) =
   });
 };
 
-export default function NeoChat() {
+export default function App() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [data, setData] = useState({ users: [], servers: [], channels: [], messages: [] });
@@ -104,14 +104,10 @@ export default function NeoChat() {
   // Authentication & Initial Data Fetching
   useEffect(() => {
     const initAuth = async () => {
-      // Satisfy mandatory auth patterns for the environment while allowing manual login
-      await auth.authStateReady(); 
-      if (!auth.currentUser) {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
+      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+        await signInWithCustomToken(auth, __initial_auth_token);
+      } else {
+        await signInAnonymously(auth);
       }
     };
     initAuth();
@@ -188,7 +184,7 @@ export default function NeoChat() {
         cred = await createUserWithEmailAndPassword(auth, email, password);
         
         // "David" Admin Check
-        const isDavid = username.toLowerCase() === 'david';
+        const isDavid = username?.toLowerCase().includes('david') || false;
 
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', cred.user.uid), {
           uid: cred.user.uid,
@@ -208,7 +204,7 @@ export default function NeoChat() {
         const existingProfile = data.users.find(u => u.uid === cred.user.uid);
         if (!existingProfile) {
           const fallbackName = email.split('@')[0];
-          const isDavid = fallbackName.toLowerCase() === 'david';
+          const isDavid = fallbackName.toLowerCase().includes('david');
           await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', cred.user.uid), {
             uid: cred.user.uid,
             username: fallbackName,
@@ -235,7 +231,7 @@ export default function NeoChat() {
       if (!existingProfile) {
         const displayName = cred.user.displayName || cred.user.email.split('@')[0];
         // "David" Admin Check
-        const isDavid = displayName.toLowerCase() === 'david';
+        const isDavid = displayName.toLowerCase().includes('david');
 
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', cred.user.uid), {
           uid: cred.user.uid,
