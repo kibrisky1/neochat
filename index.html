@@ -21,21 +21,21 @@ const db = getFirestore(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'neochat-web-v8';
 
 // --- Audio Assets ---
-const MESSAGE_SOUND = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqOkZSWl5iZmZmYl5aUkY6KhYGAfXl1cW5ramhlYmBdW1lXVlVUU1NTVFVWV1ldYGJlaGpucXV5fYCBhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en4=');
+const MESSAGE_SOUND = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqOkZSWl5iZmZmYl5aUkY6KhYGAfXl1cW5ramhlYmBdW1lXVlVUU1NTVFVWV1ldYGJlaGpucXV5fYCBhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en4=');
 
 // --- Helper Functions ---
 const generateAvatar = (seed) => "https://api.dicebear.com/7.x/avataaars/svg?seed=" + encodeURIComponent(seed) + "&backgroundColor=5865F2";
 
 const parseMarkdown = (text) => {
   if (!text) return { __html: '' };
-  let html = text
+  let html = String(text)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/__(.*?)__/g, '<u>$1</u>')
-    .replace(/`(.*?)`/g, '<code class="bg-[#202225] px-1 rounded text-[#eb459e]">$1</code>')
+    .replace(new RegExp('`(.*?)`', 'g'), '<code class="bg-[#202225] px-1 rounded text-[#eb459e]">$1</code>')
     .replace(/\n/g, '<br />');
     
   html = html.replace(
@@ -55,7 +55,8 @@ const compressImage = (file, maxWidth = 1200, maxHeight = 1200, quality = 0.7) =
       img.src = event.target.result;
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        let { width, height } = img;
+        let width = img.width;
+        let height = img.height;
 
         if (width > height) {
           if (width > maxWidth) {
@@ -99,6 +100,7 @@ export default function App() {
   const [inputText, setInputText] = useState('');
   const [toast, setToast] = useState(null);
   const [modals, setModals] = useState({ createServer: false, createChannel: false, settings: false, profile: null });
+  const [imageView, setImageView] = useState(null); // Fullscreen image viewer
   const messagesEndRef = useRef(null);
 
   // Authentication & Initial Data Fetching
@@ -126,8 +128,17 @@ export default function App() {
     const unsubscribers = collections.map(colName => {
       const colRef = collection(db, 'artifacts', appId, 'public', 'data', colName);
       return onSnapshot(colRef, (snapshot) => {
-        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setData(prev => ({ ...prev, [colName]: items }));
+        const items = snapshot.docs.map(doc => {
+          const docData = doc.data();
+          docData.id = doc.id;
+          return docData;
+        });
+        
+        setData(prev => {
+          const newData = Object.assign({}, prev);
+          newData[colName] = items;
+          return newData;
+        });
         
         if (colName === 'users') {
           const myProfile = items.find(u => u.uid === user.uid);
@@ -154,8 +165,10 @@ export default function App() {
     if (channelMessages.length > 0) {
       const lastMsg = channelMessages[channelMessages.length - 1];
       if (lastMsg && profile && lastMsg.senderId !== profile.uid && Date.now() - lastMsg.timestamp < 5000) {
-        MESSAGE_SOUND.currentTime = 0;
-        MESSAGE_SOUND.play().catch(() => {});
+        try {
+          MESSAGE_SOUND.currentTime = 0;
+          MESSAGE_SOUND.play().catch(() => {});
+        } catch(e) {}
       }
       scrollToBottom();
     }
@@ -253,8 +266,23 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    await signOut(auth);
-    window.location.reload();
+    try {
+      await signOut(auth);
+      setProfile(null);
+      setContext('home');
+      setActiveServerId(null);
+      setActiveChannelId(null);
+      
+      // Re-initialize anon session safely
+      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+        await signInWithCustomToken(auth, __initial_auth_token);
+      } else {
+        await signInAnonymously(auth);
+      }
+      showToast("Logged out successfully.", "success");
+    } catch (e) {
+      showToast("Logout failed.", "error");
+    }
   };
 
   // --- Chat Actions ---
@@ -277,7 +305,7 @@ export default function App() {
       createdAt: Date.now()
     });
 
-    setModals({ ...modals, createServer: false });
+    setModals(Object.assign({}, modals, { createServer: false }));
     switchContext('server', serverRef.id);
     showToast("Server " + name + " created!", "success");
   };
@@ -293,7 +321,7 @@ export default function App() {
       createdAt: Date.now()
     });
 
-    setModals({ ...modals, createChannel: false });
+    setModals(Object.assign({}, modals, { createChannel: false }));
     showToast("Channel #" + name + " created!", "success");
   };
 
@@ -343,7 +371,7 @@ export default function App() {
 
   const toggleReaction = async (msgId, emoji, currentReactions) => {
     const msgRef = doc(db, 'artifacts', appId, 'public', 'data', 'messages', msgId);
-    let rxns = { ...currentReactions };
+    let rxns = Object.assign({}, currentReactions);
     
     if (!rxns[emoji]) rxns[emoji] = [];
     
@@ -386,13 +414,13 @@ export default function App() {
           <div className="flex border-b border-black/20 mb-6 pb-2">
             <button 
               onClick={() => setAuthMode('login')} 
-              className={`flex-1 text-center pb-2 font-bold text-sm transition-colors ${authMode === 'login' ? 'text-white border-b-2 border-[#5865F2]' : 'text-[#8e9297] hover:text-[#b9bbbe]'}`}
+              className={"flex-1 text-center pb-2 font-bold text-sm transition-colors " + (authMode === 'login' ? 'text-white border-b-2 border-[#5865F2]' : 'text-[#8e9297] hover:text-[#b9bbbe]')}
             >
               Login
             </button>
             <button 
               onClick={() => setAuthMode('register')} 
-              className={`flex-1 text-center pb-2 font-bold text-sm transition-colors ${authMode === 'register' ? 'text-white border-b-2 border-[#5865F2]' : 'text-[#8e9297] hover:text-[#b9bbbe]'}`}
+              className={"flex-1 text-center pb-2 font-bold text-sm transition-colors " + (authMode === 'register' ? 'text-white border-b-2 border-[#5865F2]' : 'text-[#8e9297] hover:text-[#b9bbbe]')}
             >
               Register
             </button>
@@ -458,9 +486,19 @@ export default function App() {
       
       {/* Toast Notifications */}
       {toast ? (
-        <div className={`fixed top-5 right-5 z-50 px-6 py-4 rounded-lg shadow-2xl font-semibold flex items-center gap-3 animate-in slide-in-from-right-10 duration-300 ${toast.type === 'success' ? 'bg-[#3ba55c]' : toast.type === 'error' ? 'bg-[#ed4245]' : 'bg-[#5865F2]'}`}>
+        <div className={"fixed top-5 right-5 z-50 px-6 py-4 rounded-lg shadow-2xl font-semibold flex items-center gap-3 animate-in slide-in-from-right-10 duration-300 " + (toast.type === 'success' ? 'bg-[#3ba55c]' : toast.type === 'error' ? 'bg-[#ed4245]' : 'bg-[#5865F2]')}>
           <Check size={20} />
           {toast.message}
+        </div>
+      ) : null}
+
+      {/* Fullscreen Image Modal */}
+      {imageView ? (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[100] p-4 cursor-pointer" onClick={() => setImageView(null)}>
+          <img src={imageView} className="max-w-full max-h-full object-contain cursor-default" alt="Fullscreen view" onClick={e => e.stopPropagation()} />
+          <button onClick={() => setImageView(null)} className="absolute top-6 right-6 text-white hover:text-gray-300 transition-colors">
+            <X size={32} />
+          </button>
         </div>
       ) : null}
 
@@ -468,9 +506,9 @@ export default function App() {
       <div className="w-[72px] bg-[#1a1d21] flex flex-col items-center py-3 gap-2 overflow-y-auto shrink-0 z-20 border-r border-black/20" style={{ scrollbarWidth: 'none' }}>
         <button 
           onClick={() => switchContext('home')}
-          className={`relative w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-[#36393f] flex items-center justify-center transition-all duration-200 group ${context === 'home' ? 'bg-[#5865F2] rounded-[16px] text-white' : 'text-[#dcddde] hover:bg-[#5865F2] hover:text-white'}`}
+          className={"relative w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-[#36393f] flex items-center justify-center transition-all duration-200 group " + (context === 'home' ? 'bg-[#5865F2] rounded-[16px] text-white' : 'text-[#dcddde] hover:bg-[#5865F2] hover:text-white')}
         >
-          <div className={`absolute left-[-12px] w-2 bg-white rounded-r-full transition-all duration-200 ${context === 'home' ? 'h-10 opacity-100' : 'h-5 opacity-0 group-hover:opacity-100'}`} />
+          <div className={"absolute left-[-12px] w-2 bg-white rounded-r-full transition-all duration-200 " + (context === 'home' ? 'h-10 opacity-100' : 'h-5 opacity-0 group-hover:opacity-100')} />
           <img src={generateAvatar('Home')} alt="DM" className="w-full h-full object-cover rounded-inherit" />
         </button>
         
@@ -480,15 +518,15 @@ export default function App() {
           <button 
             key={srv.id}
             onClick={() => switchContext('server', srv.id)}
-            className={`relative w-12 h-12 rounded-[24px] hover:rounded-[16px] flex items-center justify-center transition-all duration-200 group overflow-hidden ${activeServerId === srv.id ? 'rounded-[16px]' : ''}`}
+            className={"relative w-12 h-12 rounded-[24px] hover:rounded-[16px] flex items-center justify-center transition-all duration-200 group overflow-hidden " + (activeServerId === srv.id ? 'rounded-[16px]' : '')}
             title={srv.name}
           >
-            <div className={`absolute left-[-12px] w-2 bg-white rounded-r-full transition-all duration-200 z-10 ${activeServerId === srv.id ? 'h-10 opacity-100' : 'h-5 opacity-0 group-hover:opacity-100'}`} />
+            <div className={"absolute left-[-12px] w-2 bg-white rounded-r-full transition-all duration-200 z-10 " + (activeServerId === srv.id ? 'h-10 opacity-100' : 'h-5 opacity-0 group-hover:opacity-100')} />
             <img src={srv.icon} alt={srv.name} className="w-full h-full object-cover" />
           </button>
         ))}
 
-        <button onClick={() => setModals({ ...modals, createServer: true })} className="w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-[#36393f] text-[#3ba55c] hover:bg-[#3ba55c] hover:text-white flex items-center justify-center transition-all duration-200">
+        <button onClick={() => setModals(Object.assign({}, modals, { createServer: true }))} className="w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-[#36393f] text-[#3ba55c] hover:bg-[#3ba55c] hover:text-white flex items-center justify-center transition-all duration-200">
           <Plus size={24} />
         </button>
         <button onClick={() => switchContext('discovery')} className="w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-[#36393f] text-[#3ba55c] hover:bg-[#3ba55c] hover:text-white flex items-center justify-center transition-all duration-200 mt-auto">
@@ -509,14 +547,14 @@ export default function App() {
                 <div className="flex items-center justify-between px-2 pt-4 pb-1 text-xs font-bold text-[#8e9297] uppercase tracking-wider group">
                   <span>Text Channels</span>
                   {profile.isAdmin ? (
-                    <button onClick={() => setModals({ ...modals, createChannel: true })} className="hover:text-white hidden group-hover:block"><Plus size={14}/></button>
+                    <button onClick={() => setModals(Object.assign({}, modals, { createChannel: true }))} className="hover:text-white hidden group-hover:block"><Plus size={14}/></button>
                   ) : null}
                 </div>
                 {serverChannels.map(ch => (
                   <button 
                     key={ch.id} 
                     onClick={() => setActiveChannelId(ch.id)}
-                    className={`w-full flex items-center gap-2 px-2 py-1.5 mb-0.5 rounded transition-colors ${activeChannelId === ch.id ? 'bg-white/10 text-white font-medium' : 'text-[#8e9297] hover:bg-white/5 hover:text-[#dcddde]'}`}
+                    className={"w-full flex items-center gap-2 px-2 py-1.5 mb-0.5 rounded transition-colors " + (activeChannelId === ch.id ? 'bg-white/10 text-white font-medium' : 'text-[#8e9297] hover:bg-white/5 hover:text-[#dcddde]')}
                   >
                     <Hash size={18} className="text-[#8e9297]" />
                     <span className="truncate">{ch.name}</span>
@@ -532,7 +570,7 @@ export default function App() {
 
           {/* User Controls */}
           <div className="h-[52px] bg-[#292b2f] flex items-center px-2 gap-2 border-t border-black/20">
-            <button onClick={() => setModals({ ...modals, profile: profile })} className="flex items-center gap-2 flex-1 min-w-0 hover:bg-white/10 p-1 rounded transition-colors text-left">
+            <button onClick={() => setModals(Object.assign({}, modals, { profile: profile }))} className="flex items-center gap-2 flex-1 min-w-0 hover:bg-white/10 p-1 rounded transition-colors text-left">
               <div className="relative shrink-0">
                 <img src={profile.avatar} alt="Avatar" className="w-8 h-8 rounded-full bg-[#202225] object-cover" />
                 <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-[#3ba55c] border-2 border-[#292b2f] rounded-full" />
@@ -548,7 +586,7 @@ export default function App() {
             <div className="flex text-[#b9bbbe]">
               <button className="p-1.5 hover:bg-white/10 rounded"><Mic size={18} /></button>
               <button className="p-1.5 hover:bg-white/10 rounded"><Headphones size={18} /></button>
-              <button onClick={() => setModals({ ...modals, settings: true })} className="p-1.5 hover:bg-white/10 rounded"><Settings size={18} /></button>
+              <button onClick={() => setModals(Object.assign({}, modals, { settings: true }))} className="p-1.5 hover:bg-white/10 rounded"><Settings size={18} /></button>
             </div>
           </div>
         </div>
@@ -587,7 +625,7 @@ export default function App() {
               <div className="flex items-center gap-4 text-[#b9bbbe]">
                 <Search size={20} className="hover:text-white cursor-pointer" />
                 <Bell size={20} className="hover:text-white cursor-pointer" />
-                <Users size={20} className={`hover:text-white cursor-pointer ${membersSidebarOpen ? 'text-white' : ''}`} onClick={() => setMembersSidebarOpen(!membersSidebarOpen)} />
+                <Users size={20} className={membersSidebarOpen ? 'text-white cursor-pointer' : 'hover:text-white cursor-pointer'} onClick={() => setMembersSidebarOpen(!membersSidebarOpen)} />
               </div>
             </div>
 
@@ -607,7 +645,7 @@ export default function App() {
                 const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
                 return (
-                  <div key={msg.id} className={`group flex gap-4 px-4 py-1 hover:bg-black/5 rounded ${isGrouped ? 'mt-0' : 'mt-4'}`}>
+                  <div key={msg.id} className={"group flex gap-4 px-4 py-1 hover:bg-black/5 rounded " + (isGrouped ? 'mt-0' : 'mt-4')}>
                     {isGrouped ? (
                       <div className="w-10 flex-shrink-0 text-right opacity-0 group-hover:opacity-100 text-[10px] text-[#72767d] pt-1 select-none">
                         {timeStr}
@@ -617,7 +655,7 @@ export default function App() {
                         src={sender && sender.avatar ? sender.avatar : generateAvatar('Unknown')} 
                         alt="Avatar" 
                         className="w-10 h-10 rounded-full cursor-pointer hover:shadow-lg transition-transform hover:scale-105 bg-[#202225] shrink-0 object-cover"
-                        onClick={() => setModals({ ...modals, profile: sender })}
+                        onClick={() => setModals(Object.assign({}, modals, { profile: sender }))}
                       />
                     )}
                     
@@ -626,7 +664,7 @@ export default function App() {
                         <div className="flex items-baseline gap-2 mb-1">
                           <span 
                             className="font-medium text-white hover:underline cursor-pointer flex items-center gap-1"
-                            onClick={() => setModals({ ...modals, profile: sender })}
+                            onClick={() => setModals(Object.assign({}, modals, { profile: sender }))}
                           >
                             {sender && sender.username ? sender.username : 'Unknown User'}
                             {sender && sender.isAdmin ? <span className="bg-amber-400 text-black text-[9px] px-1 rounded-sm tracking-wider font-bold h-3 flex items-center">ADMIN</span> : null}
@@ -639,22 +677,25 @@ export default function App() {
                         <div className="text-[#dcddde] break-words leading-relaxed" dangerouslySetInnerHTML={parseMarkdown(msg.text)} />
                       ) : null}
                       {msg.imageUrl ? (
-                        <img src={msg.imageUrl} alt="attachment" className="max-w-sm max-h-80 rounded-lg mt-2 cursor-pointer border border-white/10" onClick={()=>window.open(msg.imageUrl, '_blank')} />
+                        <img src={msg.imageUrl} alt="attachment" className="max-w-sm max-h-80 rounded-lg mt-2 cursor-pointer border border-white/10" onClick={() => setImageView(msg.imageUrl)} />
                       ) : null}
 
                       {/* Reactions */}
                       {msg.reactions && Object.keys(msg.reactions).length > 0 ? (
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {Object.entries(msg.reactions).map(([emoji, uids]) => (
-                            <button 
-                              key={emoji} 
-                              onClick={() => toggleReaction(msg.id, emoji, msg.reactions)}
-                              className={`flex items-center gap-1 px-1.5 py-0.5 rounded border ${uids.includes(profile.uid) ? 'bg-[#5865F2]/20 border-[#5865F2] text-[#5865F2]' : 'bg-[#2f3136] border-transparent text-[#b9bbbe] hover:border-white/20'} text-xs font-bold transition-colors`}
-                            >
-                              <span>{emoji}</span>
-                              <span>{uids.length}</span>
-                            </button>
-                          ))}
+                          {Object.keys(msg.reactions).map(emoji => {
+                            const uids = msg.reactions[emoji];
+                            return (
+                              <button 
+                                key={emoji} 
+                                onClick={() => toggleReaction(msg.id, emoji, msg.reactions)}
+                                className={"flex items-center gap-1 px-1.5 py-0.5 rounded border " + (uids.includes(profile.uid) ? 'bg-[#5865F2]/20 border-[#5865F2] text-[#5865F2]' : 'bg-[#2f3136] border-transparent text-[#b9bbbe] hover:border-white/20') + " text-xs font-bold transition-colors"}
+                              >
+                                <span>{emoji}</span>
+                                <span>{uids.length}</span>
+                              </button>
+                            );
+                          })}
                         </div>
                       ) : null}
                     </div>
@@ -690,7 +731,7 @@ export default function App() {
                       className="flex-1 bg-transparent text-white placeholder-[#72767d] focus:outline-none px-2 py-1"
                       autoComplete="off"
                     />
-                    <button type="submit" disabled={!inputText.trim()} className={`p-2 rounded-full transition-colors ${inputText.trim() ? 'bg-[#5865F2] text-white hover:bg-[#4752c4]' : 'text-[#72767d] bg-transparent'}`}>
+                    <button type="submit" disabled={!inputText.trim()} className={"p-2 rounded-full transition-colors " + (inputText.trim() ? 'bg-[#5865F2] text-white hover:bg-[#4752c4]' : 'text-[#72767d] bg-transparent')}>
                       <Send size={18} className={inputText.trim() ? 'translate-x-0.5' : ''}/>
                     </button>
                   </form>
@@ -711,10 +752,10 @@ export default function App() {
             Online — {data.users.length}
           </div>
           {data.users.map(u => (
-            <div key={u.uid} onClick={() => setModals({ ...modals, profile: u })} className="flex items-center gap-3 p-2 rounded hover:bg-white/5 cursor-pointer group">
+            <div key={u.uid} onClick={() => setModals(Object.assign({}, modals, { profile: u }))} className="flex items-center gap-3 p-2 rounded hover:bg-white/5 cursor-pointer group">
               <div className="relative shrink-0">
                 <img src={u.avatar} className="w-8 h-8 rounded-full bg-[#202225] object-cover" alt="" />
-                <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 border-[3px] border-[#2f3136] group-hover:border-[#33353b] rounded-full transition-colors ${u.status === 'online' ? 'bg-[#3ba55c]' : 'bg-[#747f8d]'}`} />
+                <div className={"absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 border-[3px] border-[#2f3136] group-hover:border-[#33353b] rounded-full transition-colors " + (u.status === 'online' ? 'bg-[#3ba55c]' : 'bg-[#747f8d]')} />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-[#8e9297] group-hover:text-[#dcddde] font-medium truncate flex items-center gap-1">
@@ -731,7 +772,7 @@ export default function App() {
       
       {/* Create Server Modal */}
       {modals.createServer ? (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setModals({ ...modals, createServer: false })}>
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setModals(Object.assign({}, modals, { createServer: false }))}>
           <div className="bg-[#36393f] w-full max-w-md rounded-lg p-6 shadow-2xl border border-white/5" onClick={e => e.stopPropagation()}>
             <h2 className="text-2xl font-bold text-white mb-2 text-center">Customize your server</h2>
             <p className="text-center text-[#b9bbbe] mb-6 text-sm">Give your new server a personality with a name. You can always change it later.</p>
@@ -741,7 +782,7 @@ export default function App() {
                 <input name="name" autoFocus placeholder={(profile ? profile.username : '') + "'s server"} className="w-full bg-[#202225] text-white p-2.5 rounded border border-black/30 focus:border-[#5865F2] outline-none" required />
               </div>
               <div className="flex justify-between items-center bg-[#2f3136] -m-6 p-4 mt-2 rounded-b-lg">
-                <button type="button" onClick={() => setModals({ ...modals, createServer: false })} className="text-white hover:underline px-4 py-2 text-sm">Back</button>
+                <button type="button" onClick={() => setModals(Object.assign({}, modals, { createServer: false }))} className="text-white hover:underline px-4 py-2 text-sm">Back</button>
                 <button type="submit" className="bg-[#5865F2] hover:bg-[#4752c4] text-white px-6 py-2 rounded font-medium transition-colors">Create</button>
               </div>
             </form>
@@ -751,11 +792,11 @@ export default function App() {
 
       {/* Create Channel Modal */}
       {modals.createChannel ? (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setModals({ ...modals, createChannel: false })}>
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setModals(Object.assign({}, modals, { createChannel: false }))}>
           <div className="bg-[#36393f] w-full max-w-md rounded-lg p-6 shadow-2xl border border-white/5" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-white">Create Text Channel</h2>
-              <button onClick={() => setModals({ ...modals, createChannel: false })} className="text-[#8e9297] hover:text-white"><X size={20}/></button>
+              <button onClick={() => setModals(Object.assign({}, modals, { createChannel: false }))} className="text-[#8e9297] hover:text-white"><X size={20}/></button>
             </div>
             <form onSubmit={handleCreateChannel}>
               <div className="mb-6">
@@ -766,7 +807,7 @@ export default function App() {
                 </div>
               </div>
               <div className="flex justify-end gap-3 bg-[#2f3136] -m-6 p-4 mt-2 rounded-b-lg">
-                <button type="button" onClick={() => setModals({ ...modals, createChannel: false })} className="text-white hover:underline px-4 py-2 text-sm">Cancel</button>
+                <button type="button" onClick={() => setModals(Object.assign({}, modals, { createChannel: false }))} className="text-white hover:underline px-4 py-2 text-sm">Cancel</button>
                 <button type="submit" className="bg-[#5865F2] hover:bg-[#4752c4] text-white px-6 py-2 rounded font-medium transition-colors">Create Channel</button>
               </div>
             </form>
@@ -776,7 +817,7 @@ export default function App() {
 
       {/* Profile Modal */}
       {modals.profile ? (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setModals({ ...modals, profile: null })}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setModals(Object.assign({}, modals, { profile: null }))}>
           <div className="w-[340px] bg-[#292b2f] rounded-lg shadow-2xl overflow-hidden border border-[#202225] animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
             <div className="h-24 bg-gradient-to-r from-[#5865F2] to-purple-600 relative" />
             <div className="px-4 pb-4 relative">
@@ -805,7 +846,7 @@ export default function App() {
               </div>
 
               {modals.profile.uid === profile.uid ? (
-                <button onClick={() => { setModals({...modals, profile: null, settings: true}) }} className="w-full bg-[#4f545c] hover:bg-[#5d6269] text-white py-2 rounded text-sm font-medium transition-colors">
+                <button onClick={() => setModals(Object.assign({}, modals, { profile: null, settings: true }))} className="w-full bg-[#4f545c] hover:bg-[#5d6269] text-white py-2 rounded text-sm font-medium transition-colors">
                   Edit User Profile
                 </button>
               ) : (
@@ -825,7 +866,7 @@ export default function App() {
 
       {/* Settings Modal */}
       {modals.settings ? (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => setModals({ ...modals, settings: false })}>
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => setModals(Object.assign({}, modals, { settings: false }))}>
           <div className="bg-[#36393f] w-full max-w-2xl h-[80vh] rounded-lg shadow-2xl flex overflow-hidden border border-white/10" onClick={e => e.stopPropagation()}>
             <div className="w-1/3 bg-[#2f3136] p-6 pr-4 overflow-y-auto flex flex-col" style={{ scrollbarWidth: 'none' }}>
               <div className="text-xs font-bold text-[#8e9297] uppercase mb-2 px-2">User Settings</div>
@@ -842,7 +883,7 @@ export default function App() {
               </div>
             </div>
             <div className="w-2/3 p-10 overflow-y-auto relative" style={{ scrollbarWidth: 'none' }}>
-              <div className="absolute top-6 right-6 p-1 text-[#8e9297] hover:text-white cursor-pointer hover:bg-white/10 rounded-full transition-all border-2 border-transparent hover:border-white/20" onClick={() => setModals({ ...modals, settings: false })}>
+              <div className="absolute top-6 right-6 p-1 text-[#8e9297] hover:text-white cursor-pointer hover:bg-white/10 rounded-full transition-all border-2 border-transparent hover:border-white/20" onClick={() => setModals(Object.assign({}, modals, { settings: false }))}>
                 <X size={20} />
                 <span className="absolute -bottom-5 left-1/2 transform -translate-x-1/2 text-[10px] font-bold">ESC</span>
               </div>
