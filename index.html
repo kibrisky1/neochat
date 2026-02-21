@@ -1,948 +1,1027 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { initializeApp } from 'firebase/app';
-import { 
-  getAuth, signInAnonymously, onAuthStateChanged, 
-  signInWithCustomToken, GoogleAuthProvider, signInWithPopup, 
-  createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut
-} from 'firebase/auth';
-import { 
-  getFirestore, collection, onSnapshot, doc, setDoc, addDoc, updateDoc
-} from 'firebase/firestore';
-import { 
-  Hash, Search, Bell, Users, Plus, Compass, Settings, 
-  Mic, Headphones, Send, Paperclip, X, Check, LogOut, Mail, Lock, User
-} from 'lucide-react';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NeoChat Web (Supabase Edition)</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Babel for running React JSX directly in the browser -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-// --- Configuration & Setup ---
-const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'neochat-web-v8';
+  <!-- Import Maps (Added Supabase) -->
+  <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "lucide-react": "https://esm.sh/lucide-react@0.344.0",
+        "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.3"
+      }
+    }
+  </script>
 
-// --- Audio Assets ---
-const MESSAGE_SOUND = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqOkZSWl5iZmZmYl5aUkY6KhYGAfXl1cW5ramhlYmBdW1lXVlVUU1NTVFVWV1ldYGJlaGpucXV5fYCBhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en4=');
+  <style>
+    .hide-scrollbar::-webkit-scrollbar { width: 6px; }
+    .hide-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .hide-scrollbar::-webkit-scrollbar-thumb { background-color: #202225; border-radius: 10px; }
+    .hide-scrollbar:hover::-webkit-scrollbar-thumb { background-color: #1a1d21; }
+  </style>
+</head>
+<body class="bg-[#2b2f33] text-[#dcddde] overflow-hidden">
+  
+  <div id="root"></div>
 
-// --- Helper Functions ---
-const generateAvatar = (seed) => "https://api.dicebear.com/7.x/avataaars/svg?seed=" + encodeURIComponent(seed) + "&backgroundColor=5865F2";
+  <script type="text/babel" data-type="module">
+    import React, { useState, useEffect, useRef, useMemo } from 'react';
+    import { createRoot } from 'react-dom/client';
+    import { createClient } from '@supabase/supabase-js';
+    import { 
+      Hash, Search, Bell, Users, Plus, Compass, Settings, 
+      Mic, Headphones, Send, Paperclip, X, Check, LogOut, User, Database, Mail, Lock
+    } from 'lucide-react';
 
-const parseMarkdown = (text) => {
-  if (!text) return { __html: '' };
-  let html = String(text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/__(.*?)__/g, '<u>$1</u>')
-    .replace(new RegExp('`(.*?)`', 'g'), '<code class="bg-[#202225] px-1 rounded text-[#eb459e]">$1</code>')
-    .replace(/\n/g, '<br />');
+    // ==========================================
+    // 🛑 ATTENTION: YOUR SUPABASE CONFIG HERE 🛑
+    // ==========================================
+    const supabaseUrl = 'https://cwsslsvuslimptikvrds.supabase.co'; 
+    const supabaseKey = 'sb_publishable_OETJRLtsxWNsEMTi61PpsA_QXfQqu41';
     
-  html = html.replace(
-    /(https?:\/\/[^\s]+)/g, 
-    '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-[#00aff4] hover:underline">$1</a>'
-  );
-  return { __html: html };
-};
+    // Initialize Supabase Client
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Automatic Image Compression Utility
-const compressImage = (file, maxWidth = 1200, maxHeight = 1200, quality = 0.7) => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = (event) => {
-      const img = new Image();
-      img.src = event.target.result;
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
+    // --- Audio Assets ---
+    const MESSAGE_SOUND = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqOkZSWl5iZmZmYl5aUkY6KhYGAfXl1cW5ramhlYmBdW1lXVlVUU1NTVFVWV1ldYGJlaGpucXV5fYCBhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en4=');
 
-        if (width > height) {
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          }
-        } else {
-          if (height > maxHeight) {
-            width = Math.round((width * maxHeight) / height);
-            height = maxHeight;
-          }
-        }
+    // --- Helper Functions ---
+    const generateId = (prefix) => prefix + "_" + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+    const generateAvatar = (seed) => "https://api.dicebear.com/7.x/avataaars/svg?seed=" + encodeURIComponent(seed) + "&backgroundColor=5865F2";
 
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-
-        // Compress and resolve as JPEG
-        resolve(canvas.toDataURL('image/jpeg', quality));
-      };
-      img.onerror = reject;
+    const parseMarkdown = (text) => {
+      if (!text) return { __html: '' };
+      let html = String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/__(.*?)__/g, '<u>$1</u>')
+        .replace(new RegExp('`(.*?)`', 'g'), '<code class="bg-[#202225] px-1 rounded text-[#eb459e]">$1</code>')
+        .replace(/\n/g, '<br />');
+        
+      html = html.replace(
+        /(https?:\/\/[^\s]+)/g, 
+        '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-[#00aff4] hover:underline">$1</a>'
+      );
+      return { __html: html };
     };
-    reader.onerror = reject;
-  });
-};
 
-export default function App() {
-  const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null);
-  const [data, setData] = useState({ users: [], servers: [], channels: [], messages: [] });
-  
-  // App State
-  const [context, setContext] = useState('home'); 
-  const [activeServerId, setActiveServerId] = useState(null);
-  const [activeChannelId, setActiveChannelId] = useState(null);
-  const [membersSidebarOpen, setMembersSidebarOpen] = useState(true);
-  
-  // UI State
-  const [authMode, setAuthMode] = useState('login'); // 'login' or 'register'
-  const [inputText, setInputText] = useState('');
-  const [toast, setToast] = useState(null);
-  const [modals, setModals] = useState({ createServer: false, createChannel: false, settings: false, profile: null });
-  const [imageView, setImageView] = useState(null); // Fullscreen image viewer
-  const messagesEndRef = useRef(null);
+    const compressImage = (file, maxWidth = 1200, maxHeight = 1200, quality = 0.7) => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+          const img = new Image();
+          img.src = event.target.result;
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
 
-  // Authentication & Initial Data Fetching
-  useEffect(() => {
-    const initAuth = async () => {
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        await signInWithCustomToken(auth, __initial_auth_token);
-      } else {
-        await signInAnonymously(auth);
-      }
-    };
-    initAuth();
+            if (width > height) {
+              if (width > maxWidth) {
+                height = Math.round((height * maxWidth) / width);
+                width = maxWidth;
+              }
+            } else {
+              if (height > maxHeight) {
+                width = Math.round((width * maxHeight) / height);
+                height = maxHeight;
+              }
+            }
 
-    const unsubscribeAuth = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-    });
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
 
-    return () => unsubscribeAuth();
-  }, []);
-
-  useEffect(() => {
-    if (!user) return;
-
-    const collections = ['users', 'servers', 'channels', 'messages'];
-    const unsubscribers = collections.map(colName => {
-      const colRef = collection(db, 'artifacts', appId, 'public', 'data', colName);
-      return onSnapshot(colRef, (snapshot) => {
-        const items = snapshot.docs.map(doc => {
-          const docData = doc.data();
-          docData.id = doc.id;
-          return docData;
-        });
-        
-        setData(prev => {
-          const newData = Object.assign({}, prev);
-          newData[colName] = items;
-          return newData;
-        });
-        
-        if (colName === 'users') {
-          const myProfile = items.find(u => u.uid === user.uid);
-          setProfile(myProfile || null);
-        }
-      }, (error) => console.error("Error fetching " + colName + ":", error));
-    });
-
-    return () => unsubscribers.forEach(unsub => unsub());
-  }, [user]);
-
-  // Derived Data
-  const activeServer = useMemo(() => data.servers.find(s => s.id === activeServerId), [data.servers, activeServerId]);
-  const serverChannels = useMemo(() => data.channels.filter(c => c.serverId === activeServerId).sort((a,b) => a.createdAt - b.createdAt), [data.channels, activeServerId]);
-  const activeChannel = useMemo(() => data.channels.find(c => c.id === activeChannelId), [data.channels, activeChannelId]);
-  
-  const channelMessages = useMemo(() => {
-    return data.messages
-      .filter(m => m.channelId === activeChannelId)
-      .sort((a, b) => a.timestamp - b.timestamp);
-  }, [data.messages, activeChannelId]);
-
-  useEffect(() => {
-    if (channelMessages.length > 0) {
-      const lastMsg = channelMessages[channelMessages.length - 1];
-      if (lastMsg && profile && lastMsg.senderId !== profile.uid && Date.now() - lastMsg.timestamp < 5000) {
-        try {
-          MESSAGE_SOUND.currentTime = 0;
-          MESSAGE_SOUND.play().catch(() => {});
-        } catch(e) {}
-      }
-      scrollToBottom();
-    }
-  }, [channelMessages, profile]);
-
-  const scrollToBottom = () => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
-
-  const showToast = (message, type = 'info') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
-
-  // --- Auth Actions ---
-
-  const handleEmailAuth = async (e) => {
-    e.preventDefault();
-    const email = e.target.email.value.trim();
-    const password = e.target.password.value;
-    const rawUsername = e.target.username && e.target.username.value ? e.target.username.value.trim() : '';
-
-    try {
-      let cred;
-      if (authMode === 'register') {
-        cred = await createUserWithEmailAndPassword(auth, email, password);
-        
-        // "David" Admin Check
-        const isDavid = rawUsername && rawUsername.toLowerCase().includes('david');
-
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', cred.user.uid), {
-          uid: cred.user.uid,
-          username: rawUsername,
-          avatar: generateAvatar(rawUsername),
-          bio: '',
-          isAdmin: isDavid,
-          status: 'online',
-          lastActive: Date.now()
-        }, { merge: true });
-
-        showToast("Account created successfully!", "success");
-      } else {
-        cred = await signInWithEmailAndPassword(auth, email, password);
-        
-        // If profile somehow doesn't exist yet, build a fallback
-        const existingProfile = data.users.find(u => u.uid === cred.user.uid);
-        if (!existingProfile) {
-          const fallbackName = email.split('@')[0];
-          const isDavid = fallbackName.toLowerCase().includes('david');
-          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', cred.user.uid), {
-            uid: cred.user.uid,
-            username: fallbackName,
-            avatar: generateAvatar(fallbackName),
-            bio: '',
-            isAdmin: isDavid,
-            status: 'online',
-            lastActive: Date.now()
-          }, { merge: true });
-        }
-        showToast("Logged in successfully!", "success");
-      }
-    } catch (error) {
-      showToast(error.message, "error");
-    }
-  };
-
-  const handleGoogleAuth = async () => {
-    try {
-      const provider = new GoogleAuthProvider();
-      const cred = await signInWithPopup(auth, provider);
-      
-      const existingProfile = data.users.find(u => u.uid === cred.user.uid);
-      if (!existingProfile) {
-        const displayName = cred.user.displayName || cred.user.email.split('@')[0];
-        // "David" Admin Check
-        const isDavid = displayName.toLowerCase().includes('david');
-
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', cred.user.uid), {
-          uid: cred.user.uid,
-          username: displayName,
-          avatar: cred.user.photoURL || generateAvatar(displayName),
-          bio: '',
-          isAdmin: isDavid,
-          status: 'online',
-          lastActive: Date.now()
-        }, { merge: true });
-      }
-      
-      showToast("Logged in with Google!", "success");
-    } catch (error) {
-      showToast(error.message, "error");
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      setProfile(null);
-      setContext('home');
-      setActiveServerId(null);
-      setActiveChannelId(null);
-      
-      // Re-initialize anon session safely
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        await signInWithCustomToken(auth, __initial_auth_token);
-      } else {
-        await signInAnonymously(auth);
-      }
-      showToast("Logged out successfully.", "success");
-    } catch (e) {
-      showToast("Logout failed.", "error");
-    }
-  };
-
-  // --- Chat Actions ---
-
-  const handleCreateServer = async (e) => {
-    e.preventDefault();
-    const name = e.target.name.value.trim();
-    if (!name) return;
-
-    const serverRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'servers'), {
-      name: name,
-      ownerId: profile.uid,
-      createdAt: Date.now(),
-      icon: "https://ui-avatars.com/api/?name=" + encodeURIComponent(name) + "&background=5865F2&color=fff&bold=true"
-    });
-
-    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'channels'), {
-      serverId: serverRef.id,
-      name: 'general',
-      createdAt: Date.now()
-    });
-
-    setModals(Object.assign({}, modals, { createServer: false }));
-    switchContext('server', serverRef.id);
-    showToast("Server " + name + " created!", "success");
-  };
-
-  const handleCreateChannel = async (e) => {
-    e.preventDefault();
-    const name = e.target.name.value.trim().toLowerCase().replace(/\s+/g, '-');
-    if (!name || !activeServerId) return;
-
-    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'channels'), {
-      serverId: activeServerId,
-      name: name,
-      createdAt: Date.now()
-    });
-
-    setModals(Object.assign({}, modals, { createChannel: false }));
-    showToast("Channel #" + name + " created!", "success");
-  };
-
-  const sendMessage = async (e) => {
-    if (e) e.preventDefault();
-    if (!inputText.trim() || !activeChannelId) return;
-
-    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'messages'), {
-      channelId: activeChannelId,
-      text: inputText.trim(),
-      senderId: profile.uid,
-      timestamp: Date.now(),
-      reactions: {}
-    });
-
-    setInputText('');
-  };
-
-  const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    try {
-      showToast("Compressing and uploading image...", "info");
-      // Compress for chat (Max 1200x1200px, 70% quality)
-      const compressedBase64 = await compressImage(file, 1200, 1200, 0.7);
-
-      // Final safeguard for Firestore limits
-      if (compressedBase64.length > 1000000) {
-        showToast("Image is still too large to send after compression.", "error");
-        return;
-      }
-
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'messages'), {
-        channelId: activeChannelId,
-        text: '',
-        imageUrl: compressedBase64,
-        senderId: profile.uid,
-        timestamp: Date.now(),
-        reactions: {}
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          };
+          img.onerror = reject;
+        };
+        reader.onerror = reject;
       });
-      showToast("Image uploaded!", "success");
-    } catch (err) {
-      showToast("Failed to upload image.", "error");
-    }
-  };
+    };
 
-  const toggleReaction = async (msgId, emoji, currentReactions) => {
-    const msgRef = doc(db, 'artifacts', appId, 'public', 'data', 'messages', msgId);
-    let rxns = Object.assign({}, currentReactions);
-    
-    if (!rxns[emoji]) rxns[emoji] = [];
-    
-    if (rxns[emoji].includes(profile.uid)) {
-      rxns[emoji] = rxns[emoji].filter(id => id !== profile.uid);
-      if (rxns[emoji].length === 0) delete rxns[emoji];
-    } else {
-      rxns[emoji].push(profile.uid);
-    }
-    
-    await updateDoc(msgRef, { reactions: rxns });
-  };
-
-  const switchContext = (ctx, id = null) => {
-    setContext(ctx);
-    if (ctx === 'server') {
-      setActiveServerId(id);
-      const firstChannel = data.channels.find(c => c.serverId === id);
-      if (firstChannel) setActiveChannelId(firstChannel.id);
-    } else {
-      setActiveServerId(null);
-      setActiveChannelId(null);
-    }
-  };
-
-  // --- Login Screen ---
-  if (!profile) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-gradient-to-br from-[#1a1d21] to-[#2b2f33] font-sans text-white overflow-hidden relative">
-        <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '50px 50px' }} />
-        
-        <div className="bg-[#36393f] p-8 rounded-2xl w-[480px] shadow-2xl z-10 border border-white/5 animate-in zoom-in-95 duration-300">
-          <div className="text-center mb-8">
-            <div className="text-5xl mb-4 text-[#5865F2]">💬</div>
-            <h2 className="text-2xl font-bold mb-2">Welcome to NeoChat</h2>
-            <p className="text-[#b9bbbe] text-sm">Sign in to connect with communities</p>
-          </div>
-
-          {/* Mode Toggle */}
-          <div className="flex border-b border-black/20 mb-6 pb-2">
-            <button 
-              onClick={() => setAuthMode('login')} 
-              className={"flex-1 text-center pb-2 font-bold text-sm transition-colors " + (authMode === 'login' ? 'text-white border-b-2 border-[#5865F2]' : 'text-[#8e9297] hover:text-[#b9bbbe]')}
-            >
-              Login
-            </button>
-            <button 
-              onClick={() => setAuthMode('register')} 
-              className={"flex-1 text-center pb-2 font-bold text-sm transition-colors " + (authMode === 'register' ? 'text-white border-b-2 border-[#5865F2]' : 'text-[#8e9297] hover:text-[#b9bbbe]')}
-            >
-              Register
-            </button>
-          </div>
-
-          <form onSubmit={handleEmailAuth} className="space-y-4">
-            {authMode === 'register' ? (
-              <div>
-                <label className="block text-[#b9bbbe] text-xs font-bold uppercase tracking-wider mb-2">Username</label>
-                <div className="relative">
-                  <User className="absolute left-3 top-3.5 text-[#8e9297]" size={16} />
-                  <input name="username" required placeholder="Display Name"
-                    className="w-full bg-[#202225] border border-black/30 rounded px-10 py-3 text-white focus:outline-none focus:border-[#5865F2] transition-all" />
-                </div>
-              </div>
-            ) : null}
-            
-            <div>
-              <label className="block text-[#b9bbbe] text-xs font-bold uppercase tracking-wider mb-2">Email Address</label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-3.5 text-[#8e9297]" size={16} />
-                <input name="email" type="email" required placeholder="you@example.com"
-                  className="w-full bg-[#202225] border border-black/30 rounded px-10 py-3 text-white focus:outline-none focus:border-[#5865F2] transition-all" />
-              </div>
-            </div>
-            
-            <div>
-              <label className="block text-[#b9bbbe] text-xs font-bold uppercase tracking-wider mb-2">Password</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3.5 text-[#8e9297]" size={16} />
-                <input name="password" type="password" required placeholder="••••••••" minLength="6"
-                  className="w-full bg-[#202225] border border-black/30 rounded px-10 py-3 text-white focus:outline-none focus:border-[#5865F2] transition-all" />
-              </div>
-            </div>
-            
-            <button type="submit" className="w-full bg-[#5865F2] hover:bg-[#4752c4] text-white font-bold py-3 px-4 rounded transition-all mt-4">
-              {authMode === 'login' ? 'Sign In' : 'Create Account'}
-            </button>
-          </form>
-
-          <div className="relative my-6 text-center">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-black/20" /></div>
-            <span className="relative bg-[#36393f] px-4 text-xs font-bold text-[#8e9297] uppercase tracking-wider">Or continue with</span>
-          </div>
-
-          <button onClick={handleGoogleAuth} className="w-full bg-white text-black hover:bg-gray-100 font-bold py-3 px-4 rounded transition-all flex items-center justify-center gap-3">
-            <svg viewBox="0 0 24 24" className="w-5 h-5" xmlns="http://www.w3.org/2000/svg">
-              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-            </svg>
-            Sign in with Google
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // --- Main App Render ---
-  return (
-    <div className="flex h-screen w-full bg-[#2b2f33] text-[#dcddde] font-sans overflow-hidden selection:bg-[#5865F2]/50">
+    function App() {
+      const [user, setUser] = useState(null);
+      const [data, setData] = useState({ users: [], servers: [], channels: [], messages: [] });
+      const [isLoading, setIsLoading] = useState(true);
       
-      {/* Toast Notifications */}
-      {toast ? (
-        <div className={"fixed top-5 right-5 z-50 px-6 py-4 rounded-lg shadow-2xl font-semibold flex items-center gap-3 animate-in slide-in-from-right-10 duration-300 " + (toast.type === 'success' ? 'bg-[#3ba55c]' : toast.type === 'error' ? 'bg-[#ed4245]' : 'bg-[#5865F2]')}>
-          <Check size={20} />
-          {toast.message}
-        </div>
-      ) : null}
+      const profile = user ? data.users.find(u => u.uid === user.uid) : null;
+      
+      // App State
+      const [context, setContext] = useState('home'); 
+      const [activeServerId, setActiveServerId] = useState(null);
+      const [activeChannelId, setActiveChannelId] = useState(null);
+      const [membersSidebarOpen, setMembersSidebarOpen] = useState(true);
+      
+      const [authMode, setAuthMode] = useState('login'); // 'login' or 'register'
+      const [inputText, setInputText] = useState('');
+      const [toast, setToast] = useState(null);
+      const [modals, setModals] = useState({ createServer: false, createChannel: false, settings: false, profile: null });
+      const [imageView, setImageView] = useState(null); 
+      const messagesEndRef = useRef(null);
 
-      {/* Fullscreen Image Modal */}
-      {imageView ? (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[100] p-4 cursor-pointer" onClick={() => setImageView(null)}>
-          <img src={imageView} className="max-w-full max-h-full object-contain cursor-default" alt="Fullscreen view" onClick={e => e.stopPropagation()} />
-          <button onClick={() => setImageView(null)} className="absolute top-6 right-6 text-white hover:text-gray-300 transition-colors">
-            <X size={32} />
-          </button>
-        </div>
-      ) : null}
+      // Fetch from Supabase and listen for Realtime changes
+      useEffect(() => {
+        if (supabaseUrl === 'YOUR_SUPABASE_URL') {
+            setIsLoading(false);
+            return;
+        }
 
-      {/* 1. Server Rail (Leftmost) */}
-      <div className="w-[72px] bg-[#1a1d21] flex flex-col items-center py-3 gap-2 overflow-y-auto shrink-0 z-20 border-r border-black/20" style={{ scrollbarWidth: 'none' }}>
-        <button 
-          onClick={() => switchContext('home')}
-          className={"relative w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-[#36393f] flex items-center justify-center transition-all duration-200 group " + (context === 'home' ? 'bg-[#5865F2] rounded-[16px] text-white' : 'text-[#dcddde] hover:bg-[#5865F2] hover:text-white')}
-        >
-          <div className={"absolute left-[-12px] w-2 bg-white rounded-r-full transition-all duration-200 " + (context === 'home' ? 'h-10 opacity-100' : 'h-5 opacity-0 group-hover:opacity-100')} />
-          <img src={generateAvatar('Home')} alt="DM" className="w-full h-full object-cover rounded-inherit" />
-        </button>
+        // 1. Setup Auth Listener (Automatically manages sessions)
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session) setUser({ uid: session.user.id });
+        });
+
+        const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+            if (session) {
+                setUser({ uid: session.user.id });
+            } else {
+                setUser(null);
+            }
+        });
+
+        // 2. Fetch Chat Data
+        const fetchInitialData = async () => {
+            const [usersReq, serversReq, channelsReq, messagesReq] = await Promise.all([
+                supabase.from('users').select('*'),
+                supabase.from('servers').select('*'),
+                supabase.from('channels').select('*'),
+                supabase.from('messages').select('*').order('timestamp', { ascending: true })
+            ]);
+
+            setData({
+                users: usersReq.data || [],
+                servers: serversReq.data || [],
+                channels: channelsReq.data || [],
+                messages: messagesReq.data || []
+            });
+            setIsLoading(false);
+        };
+
+        fetchInitialData();
+
+        // Subscribe to ALL Postgres changes across our 4 tables
+        const channel = supabase.channel('db-changes')
+          .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
+            const table = payload.table;
+            const eventType = payload.eventType;
+            const newRecord = payload.new;
+            const oldRecord = payload.old;
+
+            setData(prev => {
+              const next = Object.assign({}, prev);
+              if (!next[table]) return prev;
+
+              if (eventType === 'INSERT') {
+                next[table] = [...next[table], newRecord];
+              } else if (eventType === 'UPDATE') {
+                next[table] = next[table].map(item => item.id === newRecord.id ? newRecord : item);
+              } else if (eventType === 'DELETE') {
+                next[table] = next[table].filter(item => item.id !== oldRecord.id);
+              }
+              return next;
+            });
+          })
+          .subscribe();
+
+        return () => { 
+            supabase.removeChannel(channel); 
+            authListener.subscription.unsubscribe();
+        };
+      }, []);
+
+
+      const activeServer = useMemo(() => data.servers.find(s => s.id === activeServerId), [data.servers, activeServerId]);
+      const serverChannels = useMemo(() => data.channels.filter(c => c.serverId === activeServerId).sort((a,b) => a.createdAt - b.createdAt), [data.channels, activeServerId]);
+      const activeChannel = useMemo(() => data.channels.find(c => c.id === activeChannelId), [data.channels, activeChannelId]);
+      
+      const channelMessages = useMemo(() => {
+        return data.messages
+          .filter(m => m.channelId === activeChannelId)
+          .sort((a, b) => a.timestamp - b.timestamp);
+      }, [data.messages, activeChannelId]);
+
+      useEffect(() => {
+        if (channelMessages.length > 0) {
+          const lastMsg = channelMessages[channelMessages.length - 1];
+          if (lastMsg && profile && lastMsg.senderId !== profile.uid && Date.now() - lastMsg.timestamp < 5000) {
+            try {
+              MESSAGE_SOUND.currentTime = 0;
+              MESSAGE_SOUND.play().catch(() => {});
+            } catch(e) {}
+          }
+          scrollToBottom();
+        }
+      }, [channelMessages, profile]);
+
+      const scrollToBottom = () => {
+        if (messagesEndRef.current) {
+          messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+      };
+
+      const showToast = (message, type = 'info') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 3000);
+      };
+
+      // --- Supabase Password Auth ---
+
+      const handleAuth = async (e) => {
+        e.preventDefault();
+        const email = e.target.email.value.trim();
+        const password = e.target.password.value;
+        const username = e.target.username ? e.target.username.value.trim() : '';
+
+        try {
+            if (authMode === 'register') {
+                // Register via Supabase
+                const { data: authData, error: authError } = await supabase.auth.signUp({
+                    email: email,
+                    password: password
+                });
+                
+                if (authError) throw authError;
+
+                if (authData.user) {
+                    const isDavid = username.toLowerCase().includes('david');
+                    
+                    // Add public profile to our users table
+                    const finalUser = {
+                        id: authData.user.id,
+                        uid: authData.user.id,
+                        username: username,
+                        avatar: generateAvatar(username),
+                        bio: '',
+                        isAdmin: isDavid,
+                        status: 'online',
+                        lastActive: Date.now()
+                    };
+                    
+                    const { error: dbError } = await supabase.from('users').upsert(finalUser);
+                    if (dbError) throw dbError;
+                    
+                    if (!authData.session) {
+                        showToast("Check your email to confirm your account!", "info");
+                    } else {
+                        showToast("Account created!", "success");
+                    }
+                }
+            } else {
+                // Login via Supabase
+                const { error } = await supabase.auth.signInWithPassword({
+                    email: email,
+                    password: password
+                });
+                if (error) throw error;
+                showToast("Logged in successfully!", "success");
+            }
+        } catch (error) {
+            showToast(error.message, "error");
+        }
+      };
+
+      const handleLogout = async () => {
+        await supabase.auth.signOut();
+        setContext('home');
+        setActiveServerId(null);
+        setActiveChannelId(null);
+        showToast("Logged out successfully.", "success");
+      };
+
+      // --- Chat Actions ---
+
+      const handleCreateServer = async (e) => {
+        e.preventDefault();
+        const name = e.target.name.value.trim();
+        if (!name) return;
+
+        const serverId = generateId('srv');
+        const channelId = generateId('chan');
+
+        const newServer = {
+          id: serverId,
+          name: name,
+          ownerId: profile.uid,
+          createdAt: Date.now(),
+          icon: "https://ui-avatars.com/api/?name=" + encodeURIComponent(name) + "&background=5865F2&color=fff&bold=true"
+        };
+
+        const newChannel = {
+          id: channelId,
+          serverId: serverId,
+          name: 'general',
+          createdAt: Date.now()
+        };
+
+        await supabase.from('servers').insert(newServer);
+        await supabase.from('channels').insert(newChannel);
+
+        setModals(Object.assign({}, modals, { createServer: false }));
+        switchContext('server', serverId);
+        showToast("Server " + name + " created!", "success");
+      };
+
+      const handleCreateChannel = async (e) => {
+        e.preventDefault();
+        const name = e.target.name.value.trim().toLowerCase().replace(/\s+/g, '-');
+        if (!name || !activeServerId) return;
+
+        const newChannel = {
+          id: generateId('chan'),
+          serverId: activeServerId,
+          name: name,
+          createdAt: Date.now()
+        };
+
+        await supabase.from('channels').insert(newChannel);
+
+        setModals(Object.assign({}, modals, { createChannel: false }));
+        showToast("Channel #" + name + " created!", "success");
+      };
+
+      const sendMessage = async (e) => {
+        if (e) e.preventDefault();
+        if (!inputText.trim() || !activeChannelId) return;
+
+        const newMsg = {
+          id: generateId('msg'),
+          channelId: activeChannelId,
+          text: inputText.trim(),
+          senderId: profile.uid,
+          timestamp: Date.now(),
+          reactions: {}
+        };
+
+        setInputText('');
+        await supabase.from('messages').insert(newMsg);
+      };
+
+      const handleImageUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        try {
+          showToast("Compressing image...", "info");
+          const compressedBase64 = await compressImage(file, 1200, 1200, 0.8);
+
+          const newMsg = {
+            id: generateId('msg'),
+            channelId: activeChannelId,
+            text: '',
+            imageUrl: compressedBase64,
+            senderId: profile.uid,
+            timestamp: Date.now(),
+            reactions: {}
+          };
+
+          await supabase.from('messages').insert(newMsg);
+          showToast("Image uploaded!", "success");
+        } catch (err) {
+          showToast("Failed to upload image.", "error");
+        }
+      };
+
+      const toggleReaction = async (msgId, emoji, currentReactions) => {
+        let rxns = Object.assign({}, currentReactions);
         
-        <div className="w-8 h-[2px] bg-[#2f3136] rounded my-1 shrink-0" />
+        if (!rxns[emoji]) rxns[emoji] = [];
+        if (rxns[emoji].includes(profile.uid)) {
+          rxns[emoji] = rxns[emoji].filter(id => id !== profile.uid);
+          if (rxns[emoji].length === 0) delete rxns[emoji];
+        } else {
+          rxns[emoji].push(profile.uid);
+        }
+        
+        // Optimistic UI update
+        setData(prev => {
+          const updatedMessages = prev.messages.map(m => {
+            if (m.id === msgId) return Object.assign({}, m, { reactions: rxns });
+            return m;
+          });
+          return Object.assign({}, prev, { messages: updatedMessages });
+        });
 
-        {data.servers.map(srv => (
-          <button 
-            key={srv.id}
-            onClick={() => switchContext('server', srv.id)}
-            className={"relative w-12 h-12 rounded-[24px] hover:rounded-[16px] flex items-center justify-center transition-all duration-200 group overflow-hidden " + (activeServerId === srv.id ? 'rounded-[16px]' : '')}
-            title={srv.name}
-          >
-            <div className={"absolute left-[-12px] w-2 bg-white rounded-r-full transition-all duration-200 z-10 " + (activeServerId === srv.id ? 'h-10 opacity-100' : 'h-5 opacity-0 group-hover:opacity-100')} />
-            <img src={srv.icon} alt={srv.name} className="w-full h-full object-cover" />
-          </button>
-        ))}
+        // DB update
+        await supabase.from('messages').update({ reactions: rxns }).eq('id', msgId);
+      };
 
-        <button onClick={() => setModals(Object.assign({}, modals, { createServer: true }))} className="w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-[#36393f] text-[#3ba55c] hover:bg-[#3ba55c] hover:text-white flex items-center justify-center transition-all duration-200">
-          <Plus size={24} />
-        </button>
-        <button onClick={() => switchContext('discovery')} className="w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-[#36393f] text-[#3ba55c] hover:bg-[#3ba55c] hover:text-white flex items-center justify-center transition-all duration-200 mt-auto">
-          <Compass size={24} />
-        </button>
-      </div>
+      const updateProfile = async (updates) => {
+        // Optimistic
+        setData(prev => {
+           const updatedUsers = prev.users.map(u => {
+              if (u.uid === profile.uid) return Object.assign({}, u, updates);
+              return u;
+           });
+           return Object.assign({}, prev, { users: updatedUsers });
+        });
+        // DB update
+        await supabase.from('users').update(updates).eq('id', profile.id);
+      };
 
-      {/* 2. Context Sidebar (Channels / DMs) */}
-      {context !== 'discovery' ? (
-        <div className="w-60 bg-[#2f3136] flex flex-col shrink-0 border-r border-black/20">
-          <div className="h-12 px-4 flex items-center font-bold text-white shadow-sm border-b border-black/10 cursor-pointer hover:bg-white/5 transition-colors">
-            {context === 'server' && activeServer ? activeServer.name : 'Direct Messages'}
+      const switchContext = (ctx, id = null) => {
+        setContext(ctx);
+        if (ctx === 'server') {
+          setActiveServerId(id);
+          const firstChannel = data.channels.find(c => c.serverId === id);
+          if (firstChannel) setActiveChannelId(firstChannel.id);
+        } else {
+          setActiveServerId(null);
+          setActiveChannelId(null);
+        }
+      };
+
+      // --- Setup Screen (Requires URL) ---
+      if (supabaseUrl === 'YOUR_SUPABASE_URL') {
+        return (
+          <div className="flex h-screen w-full items-center justify-center bg-[#2b2f33] text-white p-8">
+            <div className="bg-[#36393f] p-8 rounded-lg max-w-3xl shadow-xl border border-[#3ba55c]">
+               <h1 className="text-2xl font-bold mb-4 text-[#3ba55c] flex items-center gap-2"><Database size={28}/> Supabase Setup Required</h1>
+               <p className="mb-4 text-[#b9bbbe]">You have the secret key, but you must add your <strong>Supabase URL</strong> at the top of the file, and create your tables first!</p>
+               
+               <ol className="text-left list-decimal list-inside space-y-4 text-[#dcddde] mb-6 font-mono text-sm bg-[#202225] p-6 rounded border border-black/50">
+                 <li>Go to your Supabase Project -> <strong>SQL Editor</strong></li>
+                 <li>Paste and run this exact code to create your tables and enable real-time tracking:</li>
+               </ol>
+
+               <div className="bg-[#1a1d21] p-4 rounded text-green-400 font-mono text-xs whitespace-pre-wrap mb-6 border border-white/10 select-all">
+{`-- Create Tables
+CREATE TABLE users ( id text primary key, uid text, username text, avatar text, bio text, "isAdmin" boolean, status text, "lastActive" bigint );
+CREATE TABLE servers ( id text primary key, name text, "ownerId" text, "createdAt" bigint, icon text );
+CREATE TABLE channels ( id text primary key, "serverId" text, name text, "createdAt" bigint );
+CREATE TABLE messages ( id text primary key, "channelId" text, text text, "imageUrl" text, "senderId" text, timestamp bigint, reactions jsonb );
+
+-- Enable Realtime
+ALTER PUBLICATION supabase_realtime ADD TABLE users, servers, channels, messages;`}
+               </div>
+            </div>
           </div>
-          
-          <div className="flex-1 overflow-y-auto p-2" style={{ scrollbarWidth: 'none' }}>
-            {context === 'server' ? (
-              <React.Fragment>
-                <div className="flex items-center justify-between px-2 pt-4 pb-1 text-xs font-bold text-[#8e9297] uppercase tracking-wider group">
-                  <span>Text Channels</span>
-                  {profile.isAdmin ? (
-                    <button onClick={() => setModals(Object.assign({}, modals, { createChannel: true }))} className="hover:text-white hidden group-hover:block"><Plus size={14}/></button>
-                  ) : null}
+        );
+      }
+
+      if (isLoading) {
+          return <div className="flex h-screen w-full items-center justify-center bg-[#2b2f33] text-white font-bold text-xl animate-pulse">Connecting to Supabase...</div>;
+      }
+
+      // --- Login Screen ---
+      if (!profile) {
+        return (
+          <div className="flex h-screen w-full items-center justify-center bg-gradient-to-br from-[#1a1d21] to-[#2b2f33] font-sans text-white overflow-hidden relative">
+            <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '50px 50px' }} />
+            
+            <div className="bg-[#36393f] p-8 rounded-2xl w-[400px] shadow-2xl z-10 border border-white/5 animate-in zoom-in-95 duration-300">
+              
+              {toast ? (
+                <div className={"absolute top-4 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-lg shadow-xl font-bold text-sm w-[90%] text-center " + (toast.type === 'success' ? 'bg-[#3ba55c]' : toast.type === 'error' ? 'bg-[#ed4245]' : 'bg-[#5865F2]')}>
+                  {toast.message}
                 </div>
-                {serverChannels.map(ch => (
-                  <button 
-                    key={ch.id} 
-                    onClick={() => setActiveChannelId(ch.id)}
-                    className={"w-full flex items-center gap-2 px-2 py-1.5 mb-0.5 rounded transition-colors " + (activeChannelId === ch.id ? 'bg-white/10 text-white font-medium' : 'text-[#8e9297] hover:bg-white/5 hover:text-[#dcddde]')}
-                  >
-                    <Hash size={18} className="text-[#8e9297]" />
-                    <span className="truncate">{ch.name}</span>
-                  </button>
-                ))}
-              </React.Fragment>
-            ) : (
-              <div className="text-center p-4 text-sm text-[#8e9297] mt-10">
-                Direct messages feature is integrated into servers. Click a user to interact!
+              ) : null}
+
+              <div className="text-center mb-6 mt-4">
+                <div className="text-5xl mb-4 text-[#3ba55c]"><Database size={48} className="mx-auto" /></div>
+                <h2 className="text-2xl font-bold mb-2">NeoChat Global</h2>
+                <p className="text-[#b9bbbe] text-sm">Powered by Supabase</p>
               </div>
+
+              {/* Mode Toggle */}
+              <div className="flex border-b border-black/20 mb-6 pb-2">
+                <button 
+                  onClick={() => setAuthMode('login')} 
+                  className={"flex-1 text-center pb-2 font-bold text-sm transition-colors " + (authMode === 'login' ? 'text-white border-b-2 border-[#5865F2]' : 'text-[#8e9297] hover:text-[#b9bbbe]')}
+                >
+                  Login
+                </button>
+                <button 
+                  onClick={() => setAuthMode('register')} 
+                  className={"flex-1 text-center pb-2 font-bold text-sm transition-colors " + (authMode === 'register' ? 'text-white border-b-2 border-[#5865F2]' : 'text-[#8e9297] hover:text-[#b9bbbe]')}
+                >
+                  Register
+                </button>
+              </div>
+
+              <form onSubmit={handleAuth} className="space-y-4">
+                {authMode === 'register' ? (
+                  <div>
+                    <label className="block text-[#b9bbbe] text-xs font-bold uppercase tracking-wider mb-2">Username</label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-3.5 text-[#8e9297]" size={16} />
+                      <input name="username" required placeholder="Display Name" autoComplete="off"
+                        className="w-full bg-[#202225] border border-black/30 rounded px-10 py-3 text-white focus:outline-none focus:border-[#5865F2] transition-all" />
+                    </div>
+                  </div>
+                ) : null}
+                
+                <div>
+                  <label className="block text-[#b9bbbe] text-xs font-bold uppercase tracking-wider mb-2">Email Address</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-3.5 text-[#8e9297]" size={16} />
+                    <input name="email" type="email" required placeholder="you@example.com"
+                      className="w-full bg-[#202225] border border-black/30 rounded px-10 py-3 text-white focus:outline-none focus:border-[#5865F2] transition-all" />
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-[#b9bbbe] text-xs font-bold uppercase tracking-wider mb-2">Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3.5 text-[#8e9297]" size={16} />
+                    <input name="password" type="password" required placeholder="••••••••" minLength="6"
+                      className="w-full bg-[#202225] border border-black/30 rounded px-10 py-3 text-white focus:outline-none focus:border-[#5865F2] transition-all" />
+                  </div>
+                </div>
+                
+                <button type="submit" className="w-full bg-[#5865F2] hover:bg-[#4752c4] text-white font-bold py-3 px-4 rounded transition-all mt-4">
+                  {authMode === 'login' ? 'Sign In' : 'Create Account'}
+                </button>
+
+                {authMode === 'register' ? (
+                  <div className="text-center text-[10px] text-[#72767d] mt-2 leading-tight">
+                    * If Supabase Email Confirmation is enabled, you will need to check your email before logging in.
+                  </div>
+                ) : null}
+              </form>
+            </div>
+          </div>
+        );
+      }
+
+      // --- Main App Render ---
+      return (
+        <div className="flex h-screen w-full bg-[#2b2f33] text-[#dcddde] font-sans overflow-hidden selection:bg-[#5865F2]/50">
+          
+          {/* Toast Notifications */}
+          {toast ? (
+            <div className={"fixed top-5 right-5 z-50 px-6 py-4 rounded-lg shadow-2xl font-semibold flex items-center gap-3 animate-in slide-in-from-right-10 duration-300 " + (toast.type === 'success' ? 'bg-[#3ba55c]' : toast.type === 'error' ? 'bg-[#ed4245]' : 'bg-[#5865F2]')}>
+              <Check size={20} />
+              {toast.message}
+            </div>
+          ) : null}
+
+          {/* Fullscreen Image Modal */}
+          {imageView ? (
+            <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[100] p-4 cursor-pointer" onClick={() => setImageView(null)}>
+              <img src={imageView} className="max-w-full max-h-full object-contain cursor-default" alt="Fullscreen view" onClick={e => e.stopPropagation()} />
+              <button onClick={() => setImageView(null)} className="absolute top-6 right-6 text-white hover:text-gray-300 transition-colors">
+                <X size={32} />
+              </button>
+            </div>
+          ) : null}
+
+          {/* 1. Server Rail (Leftmost) */}
+          <div className="w-[72px] bg-[#1a1d21] flex flex-col items-center py-3 gap-2 overflow-y-auto shrink-0 z-20 border-r border-black/20 hide-scrollbar">
+            <button 
+              onClick={() => switchContext('home')}
+              className={"relative w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-[#36393f] flex items-center justify-center transition-all duration-200 group " + (context === 'home' ? 'bg-[#5865F2] rounded-[16px] text-white' : 'text-[#dcddde] hover:bg-[#5865F2] hover:text-white')}
+            >
+              <div className={"absolute left-[-12px] w-2 bg-white rounded-r-full transition-all duration-200 " + (context === 'home' ? 'h-10 opacity-100' : 'h-5 opacity-0 group-hover:opacity-100')} />
+              <img src={generateAvatar('Home')} alt="DM" className="w-full h-full object-cover rounded-inherit" />
+            </button>
+            
+            <div className="w-8 h-[2px] bg-[#2f3136] rounded my-1 shrink-0" />
+
+            {data.servers.map(srv => (
+              <button 
+                key={srv.id}
+                onClick={() => switchContext('server', srv.id)}
+                className={"relative w-12 h-12 rounded-[24px] hover:rounded-[16px] flex items-center justify-center transition-all duration-200 group overflow-hidden " + (activeServerId === srv.id ? 'rounded-[16px]' : '')}
+                title={srv.name}
+              >
+                <div className={"absolute left-[-12px] w-2 bg-white rounded-r-full transition-all duration-200 z-10 " + (activeServerId === srv.id ? 'h-10 opacity-100' : 'h-5 opacity-0 group-hover:opacity-100')} />
+                <img src={srv.icon} alt={srv.name} className="w-full h-full object-cover" />
+              </button>
+            ))}
+
+            <button onClick={() => setModals(Object.assign({}, modals, { createServer: true }))} className="w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-[#36393f] text-[#3ba55c] hover:bg-[#3ba55c] hover:text-white flex items-center justify-center transition-all duration-200">
+              <Plus size={24} />
+            </button>
+            <button onClick={() => switchContext('discovery')} className="w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-[#36393f] text-[#3ba55c] hover:bg-[#3ba55c] hover:text-white flex items-center justify-center transition-all duration-200 mt-auto">
+              <Compass size={24} />
+            </button>
+          </div>
+
+          {/* 2. Context Sidebar (Channels / DMs) */}
+          {context !== 'discovery' ? (
+            <div className="w-60 bg-[#2f3136] flex flex-col shrink-0 border-r border-black/20">
+              <div className="h-12 px-4 flex items-center font-bold text-white shadow-sm border-b border-black/10 cursor-pointer hover:bg-white/5 transition-colors">
+                {context === 'server' && activeServer ? activeServer.name : 'Direct Messages'}
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-2 hide-scrollbar">
+                {context === 'server' ? (
+                  <React.Fragment>
+                    <div className="flex items-center justify-between px-2 pt-4 pb-1 text-xs font-bold text-[#8e9297] uppercase tracking-wider group">
+                      <span>Text Channels</span>
+                      {profile.isAdmin ? (
+                        <button onClick={() => setModals(Object.assign({}, modals, { createChannel: true }))} className="hover:text-white hidden group-hover:block"><Plus size={14}/></button>
+                      ) : null}
+                    </div>
+                    {serverChannels.map(ch => (
+                      <button 
+                        key={ch.id} 
+                        onClick={() => setActiveChannelId(ch.id)}
+                        className={"w-full flex items-center gap-2 px-2 py-1.5 mb-0.5 rounded transition-colors " + (activeChannelId === ch.id ? 'bg-white/10 text-white font-medium' : 'text-[#8e9297] hover:bg-white/5 hover:text-[#dcddde]')}
+                      >
+                        <Hash size={18} className="text-[#8e9297]" />
+                        <span className="truncate">{ch.name}</span>
+                      </button>
+                    ))}
+                  </React.Fragment>
+                ) : (
+                  <div className="text-center p-4 text-sm text-[#8e9297] mt-10">
+                    Welcome to NeoChat Global! Try creating a server using the + button on the left to start chatting with others.
+                  </div>
+                )}
+              </div>
+
+              {/* User Controls */}
+              <div className="h-[52px] bg-[#292b2f] flex items-center px-2 gap-2 border-t border-black/20">
+                <button onClick={() => setModals(Object.assign({}, modals, { profile: profile }))} className="flex items-center gap-2 flex-1 min-w-0 hover:bg-white/10 p-1 rounded transition-colors text-left">
+                  <div className="relative shrink-0">
+                    <img src={profile.avatar} alt="Avatar" className="w-8 h-8 rounded-full bg-[#202225] object-cover" />
+                    <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-[#3ba55c] border-2 border-[#292b2f] rounded-full" />
+                  </div>
+                  <div className="flex-1 min-w-0 leading-tight">
+                    <div className="text-sm font-bold text-white truncate flex items-center gap-1">
+                      {profile.username}
+                      {profile.isAdmin ? <span className="bg-amber-400 text-black text-[9px] px-1 rounded-sm tracking-wider">ADMIN</span> : null}
+                    </div>
+                    <div className="text-xs text-[#8e9297] truncate">#{profile.uid.substring(0,4)}</div>
+                  </div>
+                </button>
+                <div className="flex text-[#b9bbbe]">
+                  <button className="p-1.5 hover:bg-white/10 rounded"><Mic size={18} /></button>
+                  <button className="p-1.5 hover:bg-white/10 rounded"><Headphones size={18} /></button>
+                  <button onClick={() => setModals(Object.assign({}, modals, { settings: true }))} className="p-1.5 hover:bg-white/10 rounded"><Settings size={18} /></button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {/* 3. Main Chat Area */}
+          <div className="flex-1 flex flex-col min-w-0 bg-[#36393f] relative">
+            {context === 'discovery' ? (
+              <div className="flex-1 p-8 overflow-y-auto hide-scrollbar">
+                <h1 className="text-3xl font-bold text-white mb-6 flex items-center gap-3">
+                  <Compass className="text-[#5865F2]" size={32}/> Global Servers
+                </h1>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {data.servers.length === 0 ? (
+                    <div className="text-[#8e9297]">No servers exist yet. Create one!</div>
+                  ) : null}
+                  {data.servers.map(s => (
+                    <div key={s.id} onClick={() => switchContext('server', s.id)} className="bg-[#2f3136] rounded-lg overflow-hidden cursor-pointer hover:-translate-y-1 hover:shadow-xl transition-all border border-white/5 group">
+                      <div className="h-24 bg-gradient-to-br from-[#5865F2] to-purple-600 relative overflow-hidden group-hover:opacity-90">
+                         <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"/>
+                      </div>
+                      <div className="p-4 relative">
+                        <img src={s.icon} className="absolute -top-10 left-4 w-16 h-16 rounded-xl border-4 border-[#2f3136] bg-[#202225] shadow-lg" alt=""/>
+                        <div className="mt-8 font-bold text-white text-lg">{s.name}</div>
+                        <div className="text-sm text-[#b9bbbe] mt-1 line-clamp-2">A global server hosted on Supabase.</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <React.Fragment>
+                <div className="h-12 px-4 flex items-center justify-between shadow-sm border-b border-black/20 shrink-0 z-10 bg-[#36393f]">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Hash className="text-[#8e9297]" size={24} />
+                    <span className="font-bold text-white truncate">{activeChannel ? activeChannel.name : 'select-channel'}</span>
+                  </div>
+                  <div className="flex items-center gap-4 text-[#b9bbbe]">
+                    <Search size={20} className="hover:text-white cursor-pointer" />
+                    <Bell size={20} className="hover:text-white cursor-pointer" />
+                    <Users size={20} className={membersSidebarOpen ? 'text-white cursor-pointer' : 'hover:text-white cursor-pointer'} onClick={() => setMembersSidebarOpen(!membersSidebarOpen)} />
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-1 hide-scrollbar">
+                  {!activeChannelId ? (
+                    <div className="m-auto text-center text-[#8e9297]">
+                      <Hash size={48} className="mx-auto mb-4 opacity-50"/>
+                      <p>Select a channel to start chatting globally</p>
+                    </div>
+                  ) : null}
+                  {activeChannelId ? channelMessages.map((msg, idx) => {
+                    const prevMsg = channelMessages[idx - 1];
+                    const isGrouped = prevMsg && prevMsg.senderId === msg.senderId && (msg.timestamp - prevMsg.timestamp < 300000); 
+                    const sender = data.users.find(u => u.uid === msg.senderId);
+                    const date = new Date(msg.timestamp);
+                    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                    return (
+                      <div key={msg.id} className={"group flex gap-4 px-4 py-1 hover:bg-black/5 rounded " + (isGrouped ? 'mt-0' : 'mt-4')}>
+                        {isGrouped ? (
+                          <div className="w-10 flex-shrink-0 text-right opacity-0 group-hover:opacity-100 text-[10px] text-[#72767d] pt-1 select-none">
+                            {timeStr}
+                          </div>
+                        ) : (
+                          <img 
+                            src={sender && sender.avatar ? sender.avatar : generateAvatar('Unknown')} 
+                            alt="Avatar" 
+                            className="w-10 h-10 rounded-full cursor-pointer hover:shadow-lg transition-transform hover:scale-105 bg-[#202225] shrink-0 object-cover"
+                            onClick={() => setModals(Object.assign({}, modals, { profile: sender }))}
+                          />
+                        )}
+                        
+                        <div className="flex-1 min-w-0">
+                          {!isGrouped ? (
+                            <div className="flex items-baseline gap-2 mb-1">
+                              <span 
+                                className="font-medium text-white hover:underline cursor-pointer flex items-center gap-1"
+                                onClick={() => setModals(Object.assign({}, modals, { profile: sender }))}
+                              >
+                                {sender && sender.username ? sender.username : 'Unknown User'}
+                                {sender && sender.isAdmin ? <span className="bg-amber-400 text-black text-[9px] px-1 rounded-sm tracking-wider font-bold h-3 flex items-center">ADMIN</span> : null}
+                              </span>
+                              <span className="text-xs text-[#72767d]">{date.toLocaleDateString()} at {timeStr}</span>
+                            </div>
+                          ) : null}
+                          
+                          {msg.text ? (
+                            <div className="text-[#dcddde] break-words leading-relaxed" dangerouslySetInnerHTML={parseMarkdown(msg.text)} />
+                          ) : null}
+                          {msg.imageUrl ? (
+                            <img src={msg.imageUrl} alt="attachment" className="max-w-sm max-h-80 rounded-lg mt-2 cursor-pointer border border-white/10" onClick={() => setImageView(msg.imageUrl)} />
+                          ) : null}
+
+                          {msg.reactions && Object.keys(msg.reactions).length > 0 ? (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {Object.keys(msg.reactions).map(emoji => {
+                                const uids = msg.reactions[emoji];
+                                return (
+                                  <button 
+                                    key={emoji} 
+                                    onClick={() => toggleReaction(msg.id, emoji, msg.reactions)}
+                                    className={"flex items-center gap-1 px-1.5 py-0.5 rounded border " + (uids.includes(profile.uid) ? 'bg-[#5865F2]/20 border-[#5865F2] text-[#5865F2]' : 'bg-[#2f3136] border-transparent text-[#b9bbbe] hover:border-white/20') + " text-xs font-bold transition-colors"}
+                                  >
+                                    <span>{emoji}</span>
+                                    <span>{uids.length}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div className="absolute right-4 -mt-3 hidden group-hover:flex items-center bg-[#36393f] border border-black/20 rounded shadow-sm px-1 py-0.5">
+                          {['👍', '❤️', '😂', '😮'].map(emoji => (
+                            <button key={emoji} onClick={() => toggleReaction(msg.id, emoji, msg.reactions || {})} className="p-1 hover:bg-white/10 rounded text-lg grayscale hover:grayscale-0 transition-all hover:scale-110">
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }) : null}
+                  <div ref={messagesEndRef} className="h-4" />
+                </div>
+
+                {activeChannelId ? (
+                  <div className="px-4 pb-6 pt-2 shrink-0">
+                    <div className="bg-[#383a40] rounded-lg flex items-center p-2 gap-2 shadow-sm focus-within:ring-1 focus-within:ring-[#5865F2]">
+                      <label className="p-2 hover:bg-[#4f545c] rounded-full cursor-pointer text-[#b9bbbe] hover:text-white transition-colors">
+                        <Paperclip size={20} />
+                        <input type="file" hidden accept="image/*" onChange={handleImageUpload} />
+                      </label>
+                      <form onSubmit={sendMessage} className="flex-1 flex">
+                        <input 
+                          type="text" 
+                          value={inputText}
+                          onChange={(e) => setInputText(e.target.value)}
+                          placeholder={"Message #" + (activeChannel ? activeChannel.name : '')}
+                          className="flex-1 bg-transparent text-white placeholder-[#72767d] focus:outline-none px-2 py-1"
+                          autoComplete="off"
+                        />
+                        <button type="submit" disabled={!inputText.trim()} className={"p-2 rounded-full transition-colors " + (inputText.trim() ? 'bg-[#5865F2] text-white hover:bg-[#4752c4]' : 'text-[#72767d] bg-transparent')}>
+                          <Send size={18} className={inputText.trim() ? 'translate-x-0.5' : ''}/>
+                        </button>
+                      </form>
+                    </div>
+                    <div className="text-xs text-[#72767d] mt-1 px-2 font-mono">
+                      Markdown supported: **bold**, *italic*, __underline__, <code>code</code>
+                    </div>
+                  </div>
+                ) : null}
+              </React.Fragment>
             )}
           </div>
 
-          {/* User Controls */}
-          <div className="h-[52px] bg-[#292b2f] flex items-center px-2 gap-2 border-t border-black/20">
-            <button onClick={() => setModals(Object.assign({}, modals, { profile: profile }))} className="flex items-center gap-2 flex-1 min-w-0 hover:bg-white/10 p-1 rounded transition-colors text-left">
-              <div className="relative shrink-0">
-                <img src={profile.avatar} alt="Avatar" className="w-8 h-8 rounded-full bg-[#202225] object-cover" />
-                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-[#3ba55c] border-2 border-[#292b2f] rounded-full" />
+          {/* 4. Members Sidebar (Right) */}
+          {context === 'server' && membersSidebarOpen ? (
+            <div className="w-60 bg-[#2f3136] flex flex-col shrink-0 overflow-y-auto p-2 border-l border-black/20 hide-scrollbar">
+              <div className="text-xs font-bold text-[#8e9297] uppercase tracking-wider px-2 pt-4 pb-2">
+                Global Users — {data.users.length}
               </div>
-              <div className="flex-1 min-w-0 leading-tight">
-                <div className="text-sm font-bold text-white truncate flex items-center gap-1">
-                  {profile.username}
-                  {profile.isAdmin ? <span className="bg-amber-400 text-black text-[9px] px-1 rounded-sm tracking-wider">ADMIN</span> : null}
-                </div>
-                <div className="text-xs text-[#8e9297] truncate">#{profile.uid.substring(0,4)}</div>
-              </div>
-            </button>
-            <div className="flex text-[#b9bbbe]">
-              <button className="p-1.5 hover:bg-white/10 rounded"><Mic size={18} /></button>
-              <button className="p-1.5 hover:bg-white/10 rounded"><Headphones size={18} /></button>
-              <button onClick={() => setModals(Object.assign({}, modals, { settings: true }))} className="p-1.5 hover:bg-white/10 rounded"><Settings size={18} /></button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {/* 3. Main Chat Area */}
-      <div className="flex-1 flex flex-col min-w-0 bg-[#36393f] relative">
-        {context === 'discovery' ? (
-          <div className="flex-1 p-8 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
-            <h1 className="text-3xl font-bold text-white mb-6 flex items-center gap-3">
-              <Compass className="text-[#5865F2]" size={32}/> Discover Servers
-            </h1>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {data.servers.map(s => (
-                <div key={s.id} onClick={() => switchContext('server', s.id)} className="bg-[#2f3136] rounded-lg overflow-hidden cursor-pointer hover:-translate-y-1 hover:shadow-xl transition-all border border-white/5 group">
-                  <div className="h-24 bg-gradient-to-br from-[#5865F2] to-purple-600 relative overflow-hidden group-hover:opacity-90">
-                     <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"/>
+              {data.users.map(u => (
+                <div key={u.uid} onClick={() => setModals(Object.assign({}, modals, { profile: u }))} className="flex items-center gap-3 p-2 rounded hover:bg-white/5 cursor-pointer group">
+                  <div className="relative shrink-0">
+                    <img src={u.avatar} className="w-8 h-8 rounded-full bg-[#202225] object-cover" alt="" />
+                    <div className={"absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 border-[3px] border-[#2f3136] group-hover:border-[#33353b] rounded-full transition-colors " + (u.status === 'online' ? 'bg-[#3ba55c]' : 'bg-[#747f8d]')} />
                   </div>
-                  <div className="p-4 relative">
-                    <img src={s.icon} className="absolute -top-10 left-4 w-16 h-16 rounded-xl border-4 border-[#2f3136] bg-[#202225] shadow-lg" alt=""/>
-                    <div className="mt-8 font-bold text-white text-lg">{s.name}</div>
-                    <div className="text-sm text-[#b9bbbe] mt-1 line-clamp-2">A community server created by a NeoChat user.</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[#8e9297] group-hover:text-[#dcddde] font-medium truncate flex items-center gap-1">
+                      {u.username}
+                      {u.isAdmin ? <span className="bg-amber-400 text-black text-[8px] px-1 rounded-sm tracking-wider font-bold">ADMIN</span> : null}
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
-          </div>
-        ) : (
-          <React.Fragment>
-            {/* Header */}
-            <div className="h-12 px-4 flex items-center justify-between shadow-sm border-b border-black/20 shrink-0 z-10 bg-[#36393f]">
-              <div className="flex items-center gap-2 min-w-0">
-                <Hash className="text-[#8e9297]" size={24} />
-                <span className="font-bold text-white truncate">{activeChannel ? activeChannel.name : 'select-channel'}</span>
-              </div>
-              <div className="flex items-center gap-4 text-[#b9bbbe]">
-                <Search size={20} className="hover:text-white cursor-pointer" />
-                <Bell size={20} className="hover:text-white cursor-pointer" />
-                <Users size={20} className={membersSidebarOpen ? 'text-white cursor-pointer' : 'hover:text-white cursor-pointer'} onClick={() => setMembersSidebarOpen(!membersSidebarOpen)} />
+          ) : null}
+
+          {/* --- Modals --- */}
+          
+          {modals.createServer ? (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setModals(Object.assign({}, modals, { createServer: false }))}>
+              <div className="bg-[#36393f] w-full max-w-md rounded-lg p-6 shadow-2xl border border-white/5" onClick={e => e.stopPropagation()}>
+                <h2 className="text-2xl font-bold text-white mb-2 text-center">Customize your server</h2>
+                <p className="text-center text-[#b9bbbe] mb-6 text-sm">Give your new server a personality with a name. You can always change it later.</p>
+                <form onSubmit={handleCreateServer}>
+                  <div className="mb-6">
+                    <label className="block text-xs font-bold text-[#8e9297] uppercase mb-2">Server Name</label>
+                    <input name="name" autoFocus placeholder={(profile ? profile.username : '') + "'s server"} className="w-full bg-[#202225] text-white p-2.5 rounded border border-black/30 focus:border-[#5865F2] outline-none" required />
+                  </div>
+                  <div className="flex justify-between items-center bg-[#2f3136] -m-6 p-4 mt-2 rounded-b-lg">
+                    <button type="button" onClick={() => setModals(Object.assign({}, modals, { createServer: false }))} className="text-white hover:underline px-4 py-2 text-sm">Back</button>
+                    <button type="submit" className="bg-[#5865F2] hover:bg-[#4752c4] text-white px-6 py-2 rounded font-medium transition-colors">Create</button>
+                  </div>
+                </form>
               </div>
             </div>
+          ) : null}
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-1" style={{ scrollbarWidth: 'none' }}>
-              {!activeChannelId ? (
-                <div className="m-auto text-center text-[#8e9297]">
-                  <Hash size={48} className="mx-auto mb-4 opacity-50"/>
-                  <p>Select a channel to start chatting</p>
+          {modals.createChannel ? (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setModals(Object.assign({}, modals, { createChannel: false }))}>
+              <div className="bg-[#36393f] w-full max-w-md rounded-lg p-6 shadow-2xl border border-white/5" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-bold text-white">Create Text Channel</h2>
+                  <button onClick={() => setModals(Object.assign({}, modals, { createChannel: false }))} className="text-[#8e9297] hover:text-white"><X size={20}/></button>
                 </div>
-              ) : null}
-              {activeChannelId ? channelMessages.map((msg, idx) => {
-                const prevMsg = channelMessages[idx - 1];
-                const isGrouped = prevMsg && prevMsg.senderId === msg.senderId && (msg.timestamp - prevMsg.timestamp < 300000); 
-                const sender = data.users.find(u => u.uid === msg.senderId);
-                const date = new Date(msg.timestamp);
-                const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                <form onSubmit={handleCreateChannel}>
+                  <div className="mb-6">
+                    <label className="block text-xs font-bold text-[#8e9297] uppercase mb-2">Channel Name</label>
+                    <div className="relative flex items-center bg-[#202225] rounded border border-black/30 focus-within:border-[#5865F2]">
+                      <Hash className="absolute left-2 text-[#8e9297]" size={18} />
+                      <input name="name" autoFocus placeholder="new-channel" className="w-full bg-transparent text-white p-2.5 pl-8 outline-none" required />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-3 bg-[#2f3136] -m-6 p-4 mt-2 rounded-b-lg">
+                    <button type="button" onClick={() => setModals(Object.assign({}, modals, { createChannel: false }))} className="text-white hover:underline px-4 py-2 text-sm">Cancel</button>
+                    <button type="submit" className="bg-[#5865F2] hover:bg-[#4752c4] text-white px-6 py-2 rounded font-medium transition-colors">Create Channel</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          ) : null}
 
-                return (
-                  <div key={msg.id} className={"group flex gap-4 px-4 py-1 hover:bg-black/5 rounded " + (isGrouped ? 'mt-0' : 'mt-4')}>
-                    {isGrouped ? (
-                      <div className="w-10 flex-shrink-0 text-right opacity-0 group-hover:opacity-100 text-[10px] text-[#72767d] pt-1 select-none">
-                        {timeStr}
-                      </div>
-                    ) : (
-                      <img 
-                        src={sender && sender.avatar ? sender.avatar : generateAvatar('Unknown')} 
-                        alt="Avatar" 
-                        className="w-10 h-10 rounded-full cursor-pointer hover:shadow-lg transition-transform hover:scale-105 bg-[#202225] shrink-0 object-cover"
-                        onClick={() => setModals(Object.assign({}, modals, { profile: sender }))}
-                      />
-                    )}
+          {modals.profile ? (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setModals(Object.assign({}, modals, { profile: null }))}>
+              <div className="w-[340px] bg-[#292b2f] rounded-lg shadow-2xl overflow-hidden border border-[#202225] animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                <div className="h-24 bg-gradient-to-r from-[#5865F2] to-purple-600 relative" />
+                <div className="px-4 pb-4 relative">
+                  <div className="absolute -top-12 left-4 rounded-full border-[6px] border-[#292b2f] bg-[#292b2f]">
+                    <img src={modals.profile.avatar} className="w-20 h-20 rounded-full object-cover bg-[#202225]" alt="User Avatar" />
+                    <div className="absolute bottom-1 right-1 w-5 h-5 bg-[#3ba55c] border-[3px] border-[#292b2f] rounded-full" />
+                  </div>
+                  
+                  <div className="bg-[#1a1d21] rounded-lg p-3 mt-12 mb-4 border border-white/5">
+                    <div className="text-xl font-bold text-white flex items-center gap-2">
+                      {modals.profile.username}
+                      {modals.profile.isAdmin ? <span className="bg-amber-400 text-black text-[10px] px-1.5 py-0.5 rounded-sm tracking-wider h-fit">ADMIN</span> : null}
+                    </div>
+                    <div className="text-sm text-[#b9bbbe]">#{modals.profile.uid.substring(0,6)}</div>
                     
-                    <div className="flex-1 min-w-0">
-                      {!isGrouped ? (
-                        <div className="flex items-baseline gap-2 mb-1">
-                          <span 
-                            className="font-medium text-white hover:underline cursor-pointer flex items-center gap-1"
-                            onClick={() => setModals(Object.assign({}, modals, { profile: sender }))}
-                          >
-                            {sender && sender.username ? sender.username : 'Unknown User'}
-                            {sender && sender.isAdmin ? <span className="bg-amber-400 text-black text-[9px] px-1 rounded-sm tracking-wider font-bold h-3 flex items-center">ADMIN</span> : null}
-                          </span>
-                          <span className="text-xs text-[#72767d]">{date.toLocaleDateString()} at {timeStr}</span>
-                        </div>
-                      ) : null}
-                      
-                      {msg.text ? (
-                        <div className="text-[#dcddde] break-words leading-relaxed" dangerouslySetInnerHTML={parseMarkdown(msg.text)} />
-                      ) : null}
-                      {msg.imageUrl ? (
-                        <img src={msg.imageUrl} alt="attachment" className="max-w-sm max-h-80 rounded-lg mt-2 cursor-pointer border border-white/10" onClick={() => setImageView(msg.imageUrl)} />
-                      ) : null}
-
-                      {/* Reactions */}
-                      {msg.reactions && Object.keys(msg.reactions).length > 0 ? (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {Object.keys(msg.reactions).map(emoji => {
-                            const uids = msg.reactions[emoji];
-                            return (
-                              <button 
-                                key={emoji} 
-                                onClick={() => toggleReaction(msg.id, emoji, msg.reactions)}
-                                className={"flex items-center gap-1 px-1.5 py-0.5 rounded border " + (uids.includes(profile.uid) ? 'bg-[#5865F2]/20 border-[#5865F2] text-[#5865F2]' : 'bg-[#2f3136] border-transparent text-[#b9bbbe] hover:border-white/20') + " text-xs font-bold transition-colors"}
-                              >
-                                <span>{emoji}</span>
-                                <span>{uids.length}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ) : null}
+                    <hr className="my-3 border-white/10" />
+                    
+                    <div className="text-xs font-bold text-[#8e9297] uppercase mb-1">About Me</div>
+                    <div className="text-sm text-[#dcddde] break-words whitespace-pre-wrap">
+                      {modals.profile.bio || "This user hasn't set a bio yet."}
                     </div>
-
-                    {/* Quick Reactions Bar (Hover) */}
-                    <div className="absolute right-4 -mt-3 hidden group-hover:flex items-center bg-[#36393f] border border-black/20 rounded shadow-sm px-1 py-0.5">
-                      {['👍', '❤️', '😂', '😮'].map(emoji => (
-                        <button key={emoji} onClick={() => toggleReaction(msg.id, emoji, msg.reactions || {})} className="p-1 hover:bg-white/10 rounded text-lg grayscale hover:grayscale-0 transition-all hover:scale-110">
-                          {emoji}
-                        </button>
-                      ))}
+                    <div className="text-xs font-bold text-[#8e9297] uppercase mb-1 mt-4">NeoChat Member Since</div>
+                    <div className="text-sm text-[#dcddde]">
+                      {new Date(modals.profile.lastActive || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </div>
                   </div>
-                );
-              }) : null}
-              <div ref={messagesEndRef} className="h-4" />
-            </div>
 
-            {/* Input Area */}
-            {activeChannelId ? (
-              <div className="px-4 pb-6 pt-2 shrink-0">
-                <div className="bg-[#383a40] rounded-lg flex items-center p-2 gap-2 shadow-sm focus-within:ring-1 focus-within:ring-[#5865F2]">
-                  <label className="p-2 hover:bg-[#4f545c] rounded-full cursor-pointer text-[#b9bbbe] hover:text-white transition-colors">
-                    <Paperclip size={20} />
-                    <input type="file" hidden accept="image/*" onChange={handleImageUpload} />
-                  </label>
-                  <form onSubmit={sendMessage} className="flex-1 flex">
-                    <input 
-                      type="text" 
-                      value={inputText}
-                      onChange={(e) => setInputText(e.target.value)}
-                      placeholder={"Message #" + (activeChannel ? activeChannel.name : '')}
-                      className="flex-1 bg-transparent text-white placeholder-[#72767d] focus:outline-none px-2 py-1"
-                      autoComplete="off"
-                    />
-                    <button type="submit" disabled={!inputText.trim()} className={"p-2 rounded-full transition-colors " + (inputText.trim() ? 'bg-[#5865F2] text-white hover:bg-[#4752c4]' : 'text-[#72767d] bg-transparent')}>
-                      <Send size={18} className={inputText.trim() ? 'translate-x-0.5' : ''}/>
+                  {modals.profile.uid === profile.uid ? (
+                    <button onClick={() => setModals(Object.assign({}, modals, { profile: null, settings: true }))} className="w-full bg-[#4f545c] hover:bg-[#5d6269] text-white py-2 rounded text-sm font-medium transition-colors">
+                      Edit User Profile
                     </button>
-                  </form>
-                </div>
-                <div className="text-xs text-[#72767d] mt-1 px-2 font-mono">
-                  Markdown supported: **bold**, *italic*, __underline__, <code>code</code>
-                </div>
-              </div>
-            ) : null}
-          </React.Fragment>
-        )}
-      </div>
-
-      {/* 4. Members Sidebar (Right) */}
-      {context === 'server' && membersSidebarOpen ? (
-        <div className="w-60 bg-[#2f3136] flex flex-col shrink-0 overflow-y-auto p-2 border-l border-black/20" style={{ scrollbarWidth: 'none' }}>
-          <div className="text-xs font-bold text-[#8e9297] uppercase tracking-wider px-2 pt-4 pb-2">
-            Online — {data.users.length}
-          </div>
-          {data.users.map(u => (
-            <div key={u.uid} onClick={() => setModals(Object.assign({}, modals, { profile: u }))} className="flex items-center gap-3 p-2 rounded hover:bg-white/5 cursor-pointer group">
-              <div className="relative shrink-0">
-                <img src={u.avatar} className="w-8 h-8 rounded-full bg-[#202225] object-cover" alt="" />
-                <div className={"absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 border-[3px] border-[#2f3136] group-hover:border-[#33353b] rounded-full transition-colors " + (u.status === 'online' ? 'bg-[#3ba55c]' : 'bg-[#747f8d]')} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[#8e9297] group-hover:text-[#dcddde] font-medium truncate flex items-center gap-1">
-                  {u.username}
-                  {u.isAdmin ? <span className="bg-amber-400 text-black text-[8px] px-1 rounded-sm tracking-wider font-bold">ADMIN</span> : null}
+                  ) : (
+                    <div className="flex gap-2">
+                      <button onClick={() => showToast("Direct messages integration coming soon!", "info")} className="flex-1 bg-[#5865F2] hover:bg-[#4752c4] text-white py-2 rounded text-sm font-medium transition-colors">
+                        Send Message
+                      </button>
+                      <button className="bg-[#4f545c] hover:bg-[#5d6269] p-2 rounded transition-colors text-white" title="More">
+                         <span className="font-bold tracking-widest leading-none block transform -translate-y-1">...</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
-          ))}
-        </div>
-      ) : null}
+          ) : null}
 
-      {/* --- Modals --- */}
-      
-      {/* Create Server Modal */}
-      {modals.createServer ? (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setModals(Object.assign({}, modals, { createServer: false }))}>
-          <div className="bg-[#36393f] w-full max-w-md rounded-lg p-6 shadow-2xl border border-white/5" onClick={e => e.stopPropagation()}>
-            <h2 className="text-2xl font-bold text-white mb-2 text-center">Customize your server</h2>
-            <p className="text-center text-[#b9bbbe] mb-6 text-sm">Give your new server a personality with a name. You can always change it later.</p>
-            <form onSubmit={handleCreateServer}>
-              <div className="mb-6">
-                <label className="block text-xs font-bold text-[#8e9297] uppercase mb-2">Server Name</label>
-                <input name="name" autoFocus placeholder={(profile ? profile.username : '') + "'s server"} className="w-full bg-[#202225] text-white p-2.5 rounded border border-black/30 focus:border-[#5865F2] outline-none" required />
-              </div>
-              <div className="flex justify-between items-center bg-[#2f3136] -m-6 p-4 mt-2 rounded-b-lg">
-                <button type="button" onClick={() => setModals(Object.assign({}, modals, { createServer: false }))} className="text-white hover:underline px-4 py-2 text-sm">Back</button>
-                <button type="submit" className="bg-[#5865F2] hover:bg-[#4752c4] text-white px-6 py-2 rounded font-medium transition-colors">Create</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
-
-      {/* Create Channel Modal */}
-      {modals.createChannel ? (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setModals(Object.assign({}, modals, { createChannel: false }))}>
-          <div className="bg-[#36393f] w-full max-w-md rounded-lg p-6 shadow-2xl border border-white/5" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-white">Create Text Channel</h2>
-              <button onClick={() => setModals(Object.assign({}, modals, { createChannel: false }))} className="text-[#8e9297] hover:text-white"><X size={20}/></button>
-            </div>
-            <form onSubmit={handleCreateChannel}>
-              <div className="mb-6">
-                <label className="block text-xs font-bold text-[#8e9297] uppercase mb-2">Channel Name</label>
-                <div className="relative flex items-center bg-[#202225] rounded border border-black/30 focus-within:border-[#5865F2]">
-                  <Hash className="absolute left-2 text-[#8e9297]" size={18} />
-                  <input name="name" autoFocus placeholder="new-channel" className="w-full bg-transparent text-white p-2.5 pl-8 outline-none" required />
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 bg-[#2f3136] -m-6 p-4 mt-2 rounded-b-lg">
-                <button type="button" onClick={() => setModals(Object.assign({}, modals, { createChannel: false }))} className="text-white hover:underline px-4 py-2 text-sm">Cancel</button>
-                <button type="submit" className="bg-[#5865F2] hover:bg-[#4752c4] text-white px-6 py-2 rounded font-medium transition-colors">Create Channel</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
-
-      {/* Profile Modal */}
-      {modals.profile ? (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setModals(Object.assign({}, modals, { profile: null }))}>
-          <div className="w-[340px] bg-[#292b2f] rounded-lg shadow-2xl overflow-hidden border border-[#202225] animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-            <div className="h-24 bg-gradient-to-r from-[#5865F2] to-purple-600 relative" />
-            <div className="px-4 pb-4 relative">
-              <div className="absolute -top-12 left-4 rounded-full border-[6px] border-[#292b2f] bg-[#292b2f]">
-                <img src={modals.profile.avatar} className="w-20 h-20 rounded-full object-cover bg-[#202225]" alt="User Avatar" />
-                <div className="absolute bottom-1 right-1 w-5 h-5 bg-[#3ba55c] border-[3px] border-[#292b2f] rounded-full" />
-              </div>
-              
-              <div className="bg-[#1a1d21] rounded-lg p-3 mt-12 mb-4 border border-white/5">
-                <div className="text-xl font-bold text-white flex items-center gap-2">
-                  {modals.profile.username}
-                  {modals.profile.isAdmin ? <span className="bg-amber-400 text-black text-[10px] px-1.5 py-0.5 rounded-sm tracking-wider h-fit">ADMIN</span> : null}
-                </div>
-                <div className="text-sm text-[#b9bbbe]">#{modals.profile.uid.substring(0,6)}</div>
-                
-                <hr className="my-3 border-white/10" />
-                
-                <div className="text-xs font-bold text-[#8e9297] uppercase mb-1">About Me</div>
-                <div className="text-sm text-[#dcddde] break-words whitespace-pre-wrap">
-                  {modals.profile.bio || "This user hasn't set a bio yet."}
-                </div>
-                <div className="text-xs font-bold text-[#8e9297] uppercase mb-1 mt-4">NeoChat Member Since</div>
-                <div className="text-sm text-[#dcddde]">
-                  {new Date(modals.profile.lastActive || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                </div>
-              </div>
-
-              {modals.profile.uid === profile.uid ? (
-                <button onClick={() => setModals(Object.assign({}, modals, { profile: null, settings: true }))} className="w-full bg-[#4f545c] hover:bg-[#5d6269] text-white py-2 rounded text-sm font-medium transition-colors">
-                  Edit User Profile
-                </button>
-              ) : (
-                <div className="flex gap-2">
-                  <button onClick={() => showToast("Direct messages integration coming soon!", "info")} className="flex-1 bg-[#5865F2] hover:bg-[#4752c4] text-white py-2 rounded text-sm font-medium transition-colors">
-                    Send Message
-                  </button>
-                  <button className="bg-[#4f545c] hover:bg-[#5d6269] p-2 rounded transition-colors text-white" title="More">
-                     <span className="font-bold tracking-widest leading-none block transform -translate-y-1">...</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {/* Settings Modal */}
-      {modals.settings ? (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => setModals(Object.assign({}, modals, { settings: false }))}>
-          <div className="bg-[#36393f] w-full max-w-2xl h-[80vh] rounded-lg shadow-2xl flex overflow-hidden border border-white/10" onClick={e => e.stopPropagation()}>
-            <div className="w-1/3 bg-[#2f3136] p-6 pr-4 overflow-y-auto flex flex-col" style={{ scrollbarWidth: 'none' }}>
-              <div className="text-xs font-bold text-[#8e9297] uppercase mb-2 px-2">User Settings</div>
-              <div className="bg-[#393c43] text-white px-3 py-1.5 rounded mb-0.5 cursor-pointer font-medium">My Account</div>
-              <div className="text-[#b9bbbe] hover:bg-white/5 px-3 py-1.5 rounded mb-4 cursor-pointer">Profiles</div>
-              <div className="text-xs font-bold text-[#8e9297] uppercase mb-2 px-2 mt-4">App Settings</div>
-              <div className="text-[#b9bbbe] hover:bg-white/5 px-3 py-1.5 rounded mb-0.5 cursor-pointer">Appearance</div>
-              <div className="text-[#b9bbbe] hover:bg-white/5 px-3 py-1.5 rounded mb-0.5 cursor-pointer">Notifications</div>
-              
-              <div className="mt-auto border-t border-white/10 pt-4">
-                 <button onClick={handleLogout} className="flex items-center justify-center gap-2 bg-[#ed4245] hover:bg-[#c9383b] text-white px-3 py-2 rounded w-full transition-colors font-bold shadow-sm">
-                   <LogOut size={16}/> Log Out
-                 </button>
-              </div>
-            </div>
-            <div className="w-2/3 p-10 overflow-y-auto relative" style={{ scrollbarWidth: 'none' }}>
-              <div className="absolute top-6 right-6 p-1 text-[#8e9297] hover:text-white cursor-pointer hover:bg-white/10 rounded-full transition-all border-2 border-transparent hover:border-white/20" onClick={() => setModals(Object.assign({}, modals, { settings: false }))}>
-                <X size={20} />
-                <span className="absolute -bottom-5 left-1/2 transform -translate-x-1/2 text-[10px] font-bold">ESC</span>
-              </div>
-              
-              <h2 className="text-xl font-bold text-white mb-6">My Account</h2>
-              
-              <div className="bg-[#202225] rounded-lg p-4 mb-6 relative overflow-hidden">
-                <div className="h-24 bg-[#5865F2] absolute top-0 left-0 right-0" />
-                <div className="relative mt-12 flex justify-between items-end mb-4">
-                  <div className="flex items-end gap-4">
-                     <img src={profile.avatar} className="w-20 h-20 rounded-full border-4 border-[#202225] bg-[#36393f] object-cover" alt="" />
-                     <div className="mb-2">
-                       <div className="text-xl font-bold text-white leading-tight">{profile.username}</div>
-                       <div className="text-sm text-[#b9bbbe]">#{profile.uid.substring(0,4)}</div>
-                     </div>
-                  </div>
-                  <label className="bg-[#5865F2] hover:bg-[#4752c4] text-white px-4 py-1.5 rounded text-sm font-medium cursor-pointer transition-colors mb-2">
-                    Edit Avatar
-                    <input type="file" hidden accept="image/*" onChange={async (e) => {
-                       const f = e.target.files[0];
-                       if(f) {
-                         try {
-                           showToast("Compressing new avatar...", "info");
-                           // Compressing heavily for avatars
-                           const compressedAvatar = await compressImage(f, 400, 400, 0.8);
-                           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', profile.uid), { avatar: compressedAvatar });
-                           showToast("Avatar updated!", "success");
-                         } catch (err) {
-                           showToast("Error updating avatar", "error");
-                         }
-                       }
-                    }}/>
-                  </label>
-                </div>
-                <div className="bg-[#2f3136] rounded p-4 border border-white/5">
-                  <div className="mb-4">
-                     <label className="block text-xs font-bold text-[#8e9297] uppercase mb-1">Username</label>
-                     <div className="text-white">{profile.username}</div>
-                  </div>
-                  <div>
-                     <label className="block text-xs font-bold text-[#8e9297] uppercase mb-1">Bio</label>
-                     <textarea 
-                        className="w-full bg-[#202225] text-white p-2 rounded border border-black/30 focus:border-[#5865F2] outline-none text-sm resize-none" 
-                        rows="3"
-                        defaultValue={profile.bio}
-                        onBlur={(e) => {
-                          updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', profile.uid), { bio: e.target.value });
-                        }}
-                        placeholder="Tell everyone a little about yourself..."
-                     />
+          {modals.settings ? (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => setModals(Object.assign({}, modals, { settings: false }))}>
+              <div className="bg-[#36393f] w-full max-w-2xl h-[80vh] rounded-lg shadow-2xl flex overflow-hidden border border-white/10" onClick={e => e.stopPropagation()}>
+                <div className="w-1/3 bg-[#2f3136] p-6 pr-4 overflow-y-auto flex flex-col hide-scrollbar">
+                  <div className="text-xs font-bold text-[#8e9297] uppercase mb-2 px-2">User Settings</div>
+                  <div className="bg-[#393c43] text-white px-3 py-1.5 rounded mb-0.5 cursor-pointer font-medium">My Account</div>
+                  <div className="text-[#b9bbbe] hover:bg-white/5 px-3 py-1.5 rounded mb-4 cursor-pointer">Profiles</div>
+                  <div className="text-xs font-bold text-[#8e9297] uppercase mb-2 px-2 mt-4">App Settings</div>
+                  <div className="text-[#b9bbbe] hover:bg-white/5 px-3 py-1.5 rounded mb-0.5 cursor-pointer">Appearance</div>
+                  <div className="text-[#b9bbbe] hover:bg-white/5 px-3 py-1.5 rounded mb-0.5 cursor-pointer">Notifications</div>
+                  
+                  <div className="mt-auto border-t border-white/10 pt-4">
+                     <button onClick={handleLogout} className="flex items-center justify-center gap-2 bg-[#ed4245] hover:bg-[#c9383b] text-white px-3 py-2 rounded w-full transition-colors font-bold shadow-sm">
+                       <LogOut size={16}/> Log Out
+                     </button>
                   </div>
                 </div>
+                <div className="w-2/3 p-10 overflow-y-auto relative hide-scrollbar">
+                  <div className="absolute top-6 right-6 p-1 text-[#8e9297] hover:text-white cursor-pointer hover:bg-white/10 rounded-full transition-all border-2 border-transparent hover:border-white/20" onClick={() => setModals(Object.assign({}, modals, { settings: false }))}>
+                    <X size={20} />
+                    <span className="absolute -bottom-5 left-1/2 transform -translate-x-1/2 text-[10px] font-bold">ESC</span>
+                  </div>
+                  
+                  <h2 className="text-xl font-bold text-white mb-6">My Account</h2>
+                  
+                  <div className="bg-[#202225] rounded-lg p-4 mb-6 relative overflow-hidden">
+                    <div className="h-24 bg-[#5865F2] absolute top-0 left-0 right-0" />
+                    <div className="relative mt-12 flex justify-between items-end mb-4">
+                      <div className="flex items-end gap-4">
+                         <img src={profile.avatar} className="w-20 h-20 rounded-full border-4 border-[#202225] bg-[#36393f] object-cover" alt="" />
+                         <div className="mb-2">
+                           <div className="text-xl font-bold text-white leading-tight">{profile.username}</div>
+                           <div className="text-sm text-[#b9bbbe]">#{profile.uid.substring(0,4)}</div>
+                         </div>
+                      </div>
+                      <label className="bg-[#5865F2] hover:bg-[#4752c4] text-white px-4 py-1.5 rounded text-sm font-medium cursor-pointer transition-colors mb-2">
+                        Edit Avatar
+                        <input type="file" hidden accept="image/*" onChange={async (e) => {
+                           const f = e.target.files[0];
+                           if(f) {
+                             try {
+                               showToast("Compressing new avatar...", "info");
+                               const compressedAvatar = await compressImage(f, 400, 400, 0.8);
+                               updateProfile({ avatar: compressedAvatar });
+                               showToast("Avatar updated!", "success");
+                             } catch (err) {
+                               showToast("Error updating avatar", "error");
+                             }
+                           }
+                        }}/>
+                      </label>
+                    </div>
+                    <div className="bg-[#2f3136] rounded p-4 border border-white/5">
+                      <div className="mb-4">
+                         <label className="block text-xs font-bold text-[#8e9297] uppercase mb-1">Username</label>
+                         <div className="text-white">{profile.username}</div>
+                      </div>
+                      <div>
+                         <label className="block text-xs font-bold text-[#8e9297] uppercase mb-1">Bio</label>
+                         <textarea 
+                            className="w-full bg-[#202225] text-white p-2 rounded border border-black/30 focus:border-[#5865F2] outline-none text-sm resize-none" 
+                            rows="3"
+                            defaultValue={profile.bio}
+                            onBlur={(e) => {
+                              updateProfile({ bio: e.target.value });
+                            }}
+                            placeholder="Tell everyone a little about yourself..."
+                         />
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
               </div>
-
             </div>
-          </div>
-        </div>
-      ) : null}
+          ) : null}
 
-    </div>
-  );
-}
+        </div>
+      );
+    }
+
+    // Mount the App
+    const root = createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
