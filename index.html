@@ -247,7 +247,10 @@
                   if (!next[table]) return prev;
 
                   if (eventType === 'INSERT') {
-                    next[table] = [...next[table], newRecord];
+                    // Prevent duplicate rendering if we already optimistically added it locally
+                    if (!next[table].find(item => item.id === newRecord.id)) {
+                        next[table] = [...next[table], newRecord];
+                    }
                   } else if (eventType === 'UPDATE') {
                     next[table] = next[table].map(item => item.id === newRecord.id ? newRecord : item);
                   } else if (eventType === 'DELETE') {
@@ -423,6 +426,12 @@
           createdAt: Date.now()
         };
 
+        // Optimistic UI Update: Render instantly
+        setData(prev => Object.assign({}, prev, {
+          servers: [...prev.servers, newServer],
+          channels: [...prev.channels, newChannel]
+        }));
+
         await supabase.from('servers').insert(newServer);
         await supabase.from('channels').insert(newChannel);
 
@@ -444,6 +453,11 @@
           createdAt: Date.now()
         };
 
+        // Optimistic UI Update: Render instantly
+        setData(prev => Object.assign({}, prev, {
+          channels: [...prev.channels, newChannel]
+        }));
+
         await supabase.from('channels').insert(newChannel);
         setModals(m => ({ ...m, createChannel: false }));
         showToast("Channel #" + name + " created!", "success");
@@ -463,6 +477,12 @@
         };
 
         setInputText('');
+
+        // Optimistic UI Update: Render message instantly
+        setData(prev => Object.assign({}, prev, {
+          messages: [...prev.messages, newMsg]
+        }));
+
         await supabase.from('messages').insert(newMsg);
       };
 
@@ -483,6 +503,11 @@
             timestamp: Date.now(),
             reactions: {}
           };
+
+          // Optimistic UI Update: Render image instantly
+          setData(prev => Object.assign({}, prev, {
+            messages: [...prev.messages, newMsg]
+          }));
 
           await supabase.from('messages').insert(newMsg);
           showToast("Image uploaded!", "success");
