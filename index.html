@@ -43,7 +43,7 @@
     import { createClient } from '@supabase/supabase-js';
     import { 
       Hash, Search, Bell, Users, Plus, Compass, Settings, 
-      Mic, MicOff, Headphones, Send, Paperclip, X, Check, LogOut, User, Database, Mail, Lock, Menu
+      Mic, MicOff, Headphones, Send, Paperclip, X, Check, LogOut, User, Database, Mail, Lock, Menu, AlertCircle, ShieldBan
     } from 'lucide-react';
 
     // ==========================================
@@ -155,20 +155,33 @@
       const [activeServerId, setActiveServerId] = useState(null);
       const [activeChannelId, setActiveChannelId] = useState(null);
       
-      // Mobile Toggle States
+      // Mobile & UI State
       const [leftMenuOpen, setLeftMenuOpen] = useState(false);
       const [membersSidebarOpen, setMembersSidebarOpen] = useState(false);
+      const [profileMenuOpen, setProfileMenuOpen] = useState(false);
       
-      // User Hardware States
+      // Hardware States
       const [micMuted, setMicMuted] = useState(false);
       const [deafened, setDeafened] = useState(false);
       
+      // Search & Input State
       const [authMode, setAuthMode] = useState('login'); 
       const [inputText, setInputText] = useState('');
+      const [searchQuery, setSearchQuery] = useState('');
       const [toast, setToast] = useState(null);
-      const [modals, setModals] = useState({ createServer: false, createChannel: false, settings: false, profile: null, serverSettings: false });
       const [imageView, setImageView] = useState(null); 
       const messagesEndRef = useRef(null);
+
+      // Modals Setup
+      const [modals, setModals] = useState({ 
+          createServer: false, 
+          createChannel: false, 
+          settings: false, 
+          profile: null, 
+          serverSettings: false,
+          search: false,
+          notifications: false
+      });
 
       // Fetch from Supabase and listen for Realtime changes
       useEffect(() => {
@@ -250,6 +263,25 @@
           .sort((a, b) => a.timestamp - b.timestamp);
       }, [data.messages, activeChannelId]);
 
+      // Search and Notification Derivations
+      const searchResults = useMemo(() => {
+          if (!searchQuery.trim()) return [];
+          const q = searchQuery.toLowerCase();
+          return data.messages.filter(m => m.text && m.text.toLowerCase().includes(q)).sort((a,b) => b.timestamp - a.timestamp).slice(0, 30);
+      }, [data.messages, searchQuery]);
+
+      const myNotifications = useMemo(() => {
+          if (!profile) return [];
+          // Find DMs where I am a participant
+          const myDMs = data.channels.filter(c => c.serverId === 'dm' && c.name.includes(profile.uid));
+          const dmIds = myDMs.map(c => c.id);
+          // Get recent messages in these DMs sent by others
+          return data.messages
+              .filter(m => dmIds.includes(m.channelId) && m.senderId !== profile.uid)
+              .sort((a,b) => b.timestamp - a.timestamp)
+              .slice(0, 10);
+      }, [data.channels, data.messages, profile]);
+
       useEffect(() => {
         if (channelMessages.length > 0) {
           const lastMsg = channelMessages[channelMessages.length - 1];
@@ -274,8 +306,7 @@
         setTimeout(() => setToast(null), 3000);
       };
 
-      // --- Supabase Password Auth ---
-
+      // --- Auth Actions ---
       const handleAuth = async (e) => {
         e.preventDefault();
         const email = e.target.email.value.trim();
@@ -284,18 +315,11 @@
 
         try {
             if (authMode === 'register') {
-                // Register via Supabase
-                const { data: authData, error: authError } = await supabase.auth.signUp({
-                    email: email,
-                    password: password
-                });
-                
+                const { data: authData, error: authError } = await supabase.auth.signUp({ email, password });
                 if (authError) throw authError;
 
                 if (authData.user) {
                     const isDavid = username.toLowerCase().includes('david');
-                    
-                    // Add public profile to our users table (pfp.png as default)
                     const finalUser = {
                         id: authData.user.id,
                         uid: authData.user.id,
@@ -317,11 +341,7 @@
                     }
                 }
             } else {
-                // Login via Supabase
-                const { error } = await supabase.auth.signInWithPassword({
-                    email: email,
-                    password: password
-                });
+                const { error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) throw error;
                 showToast("Logged in successfully!", "success");
             }
@@ -339,6 +359,33 @@
       };
 
       // --- Chat Actions ---
+      const handleStartDM = async (targetUser) => {
+        if (!profile || !targetUser) return;
+        
+        // Ensure consistent naming convention for the DM channel
+        const uids = [profile.uid, targetUser.uid].sort();
+        const dmName = uids.join('_');
+        
+        // Check if DM channel exists
+        let dmChannel = data.channels.find(c => c.serverId === 'dm' && c.name === dmName);
+        
+        if (!dmChannel) {
+            const newChannel = {
+                id: generateId('chan'),
+                serverId: 'dm',
+                name: dmName,
+                createdAt: Date.now()
+            };
+            await supabase.from('channels').insert(newChannel);
+            dmChannel = newChannel;
+        }
+
+        setModals(m => ({ ...m, profile: null }));
+        setLeftMenuOpen(false);
+        setContext('home');
+        setActiveServerId(null);
+        setActiveChannelId(dmChannel.id);
+      };
 
       const handleCreateServer = async (e) => {
         e.preventDefault();
@@ -385,7 +432,6 @@
         };
 
         await supabase.from('channels').insert(newChannel);
-
         setModals(m => ({ ...m, createChannel: false }));
         showToast("Channel #" + name + " created!", "success");
       };
@@ -434,7 +480,6 @@
 
       const toggleReaction = async (msgId, emoji, currentReactions) => {
         let rxns = Object.assign({}, currentReactions);
-        
         if (!rxns[emoji]) rxns[emoji] = [];
         if (rxns[emoji].includes(profile.uid)) {
           rxns[emoji] = rxns[emoji].filter(id => id !== profile.uid);
@@ -443,7 +488,6 @@
           rxns[emoji].push(profile.uid);
         }
         
-        // Optimistic UI update
         setData(prev => {
           const updatedMessages = prev.messages.map(m => {
             if (m.id === msgId) return Object.assign({}, m, { reactions: rxns });
@@ -452,12 +496,10 @@
           return Object.assign({}, prev, { messages: updatedMessages });
         });
 
-        // DB update
         await supabase.from('messages').update({ reactions: rxns }).eq('id', msgId);
       };
 
       const updateProfile = async (updates) => {
-        // Optimistic
         setData(prev => {
            const updatedUsers = prev.users.map(u => {
               if (u.uid === profile.uid) return Object.assign({}, u, updates);
@@ -465,7 +507,6 @@
            });
            return Object.assign({}, prev, { users: updatedUsers });
         });
-        // DB update
         await supabase.from('users').update(updates).eq('id', profile.id);
       };
 
@@ -479,16 +520,14 @@
           setActiveServerId(null);
           setActiveChannelId(null);
         }
-        // Auto-close left menu on mobile after selection
         setLeftMenuOpen(false);
       };
 
-      // --- Loading Screen ---
+      // --- Loading & Login UI ---
       if (isLoading) {
           return <div className="flex h-screen w-full items-center justify-center bg-[#2b2f33] text-white font-bold text-xl animate-pulse">Connecting...</div>;
       }
 
-      // --- Login Screen ---
       if (!profile) {
         return (
           <div className="flex h-screen w-full items-center justify-center bg-gradient-to-br from-[#1a1d21] to-[#2b2f33] font-sans text-white overflow-hidden relative p-4">
@@ -497,7 +536,7 @@
             <div className="bg-[#36393f] p-6 md:p-8 rounded-2xl w-full max-w-[400px] shadow-2xl z-10 border border-white/5 animate-in zoom-in-95 duration-300">
               
               {toast ? (
-                <div className={"absolute top-4 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-lg shadow-xl font-bold text-sm w-[90%] text-center " + (toast.type === 'success' ? 'bg-[#3ba55c]' : toast.type === 'error' ? 'bg-[#ed4245]' : 'bg-[#5865F2]')}>
+                <div className={"absolute top-4 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-lg shadow-xl font-bold text-sm w-[90%] text-center z-[200] " + (toast.type === 'success' ? 'bg-[#3ba55c]' : toast.type === 'error' ? 'bg-[#ed4245]' : 'bg-[#5865F2]')}>
                   {toast.message}
                 </div>
               ) : null}
@@ -510,20 +549,8 @@
 
               {/* Mode Toggle */}
               <div className="flex border-b border-black/20 mb-6 pb-2">
-                <button 
-                  type="button"
-                  onClick={() => setAuthMode('login')} 
-                  className={"flex-1 text-center pb-2 font-bold text-sm transition-colors " + (authMode === 'login' ? 'text-white border-b-2 border-[#5865F2]' : 'text-[#8e9297] hover:text-[#b9bbbe]')}
-                >
-                  Login
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => setAuthMode('register')} 
-                  className={"flex-1 text-center pb-2 font-bold text-sm transition-colors " + (authMode === 'register' ? 'text-white border-b-2 border-[#5865F2]' : 'text-[#8e9297] hover:text-[#b9bbbe]')}
-                >
-                  Register
-                </button>
+                <button type="button" onClick={() => setAuthMode('login')} className={"flex-1 text-center pb-2 font-bold text-sm transition-colors " + (authMode === 'login' ? 'text-white border-b-2 border-[#5865F2]' : 'text-[#8e9297] hover:text-[#b9bbbe]')}>Login</button>
+                <button type="button" onClick={() => setAuthMode('register')} className={"flex-1 text-center pb-2 font-bold text-sm transition-colors " + (authMode === 'register' ? 'text-white border-b-2 border-[#5865F2]' : 'text-[#8e9297] hover:text-[#b9bbbe]')}>Register</button>
               </div>
 
               <form onSubmit={handleAuth} className="space-y-4">
@@ -532,8 +559,7 @@
                     <label className="block text-[#b9bbbe] text-xs font-bold uppercase tracking-wider mb-2">Username</label>
                     <div className="relative">
                       <User className="absolute left-3 top-3.5 text-[#8e9297]" size={16} />
-                      <input name="username" required placeholder="Display Name" autoComplete="off"
-                        className="w-full bg-[#202225] border border-black/30 rounded px-10 py-3 text-white focus:outline-none focus:border-[#5865F2] transition-all" />
+                      <input name="username" required placeholder="Display Name" autoComplete="off" className="w-full bg-[#202225] border border-black/30 rounded px-10 py-3 text-white focus:outline-none focus:border-[#5865F2] transition-all" />
                     </div>
                   </div>
                 ) : null}
@@ -542,8 +568,7 @@
                   <label className="block text-[#b9bbbe] text-xs font-bold uppercase tracking-wider mb-2">Email Address</label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-3.5 text-[#8e9297]" size={16} />
-                    <input name="email" type="email" required placeholder="you@example.com"
-                      className="w-full bg-[#202225] border border-black/30 rounded px-10 py-3 text-white focus:outline-none focus:border-[#5865F2] transition-all" />
+                    <input name="email" type="email" required placeholder="you@example.com" className="w-full bg-[#202225] border border-black/30 rounded px-10 py-3 text-white focus:outline-none focus:border-[#5865F2] transition-all" />
                   </div>
                 </div>
                 
@@ -551,8 +576,7 @@
                   <label className="block text-[#b9bbbe] text-xs font-bold uppercase tracking-wider mb-2">Password</label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-3.5 text-[#8e9297]" size={16} />
-                    <input name="password" type="password" required placeholder="••••••••" minLength="6"
-                      className="w-full bg-[#202225] border border-black/30 rounded px-10 py-3 text-white focus:outline-none focus:border-[#5865F2] transition-all" />
+                    <input name="password" type="password" required placeholder="••••••••" minLength="6" className="w-full bg-[#202225] border border-black/30 rounded px-10 py-3 text-white focus:outline-none focus:border-[#5865F2] transition-all" />
                   </div>
                 </div>
                 
@@ -563,6 +587,25 @@
             </div>
           </div>
         );
+      }
+
+      // Pre-process DM channels to extract user objects
+      const dmChannelsWithUsers = context === 'home' 
+        ? data.channels.filter(c => c.serverId === 'dm' && c.name.includes(profile.uid)).map(c => {
+            const otherUid = c.name.split('_').find(id => id !== profile.uid);
+            const otherUser = data.users.find(u => u.uid === otherUid) || { username: 'Unknown User', avatar: 'pfp.png' };
+            return { ...c, targetUser: otherUser };
+        }) : [];
+
+      // Find top header info for active channel
+      let activeChannelInfo = { name: 'select-channel', isDM: false };
+      if (activeChannelId) {
+         if (context === 'server' && activeChannel) {
+             activeChannelInfo = { name: activeChannel.name, isDM: false };
+         } else if (context === 'home') {
+             const ch = dmChannelsWithUsers.find(c => c.id === activeChannelId);
+             if (ch) activeChannelInfo = { name: ch.targetUser.username, avatar: ch.targetUser.avatar, isDM: true };
+         }
       }
 
       // --- Main App Render ---
@@ -579,7 +622,7 @@
 
           {/* Fullscreen Image Modal */}
           {imageView ? (
-            <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[100] p-4 cursor-pointer" onClick={() => setImageView(null)}>
+            <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[150] p-4 cursor-pointer" onClick={() => setImageView(null)}>
               <img src={imageView} className="max-w-full max-h-full object-contain cursor-default" alt="Fullscreen view" onClick={e => e.stopPropagation()} />
               <button type="button" onClick={() => setImageView(null)} className="absolute top-6 right-6 text-white hover:text-gray-300 transition-colors bg-black/50 p-2 rounded-full">
                 <X size={24} />
@@ -637,10 +680,10 @@
             {/* Context Sidebar (Channels / DMs) */}
             {context !== 'discovery' ? (
               <div className="w-60 bg-[#2f3136] flex flex-col shrink-0 border-r border-black/20">
-                <div className="h-12 px-4 flex items-center justify-between font-bold text-white shadow-sm border-b border-black/10 transition-colors">
+                <div className="h-12 px-4 flex items-center justify-between font-bold text-white shadow-sm border-b border-black/10 transition-colors shrink-0">
                   <span className="truncate">{context === 'server' && activeServer ? activeServer.name : 'Direct Messages'}</span>
                   {context === 'server' && activeServer && profile && activeServer.ownerId === profile.uid ? (
-                    <button type="button" onClick={() => setModals(m => ({ ...m, serverSettings: true }))} className="p-1 hover:bg-white/10 rounded transition-colors text-[#b9bbbe] hover:text-white" title="Server Settings">
+                    <button type="button" onClick={() => setModals(m => ({ ...m, serverSettings: true }))} className="p-1 hover:bg-white/10 rounded transition-colors text-[#b9bbbe] hover:text-white shrink-0" title="Server Settings">
                       <Settings size={16} />
                     </button>
                   ) : null}
@@ -668,14 +711,31 @@
                       ))}
                     </React.Fragment>
                   ) : (
-                    <div className="text-center p-4 text-sm text-[#8e9297] mt-10">
-                      Welcome to NeoChat! Try creating a server using the + button on the left to start chatting with others.
-                    </div>
+                    <React.Fragment>
+                      <div className="text-xs font-bold text-[#8e9297] uppercase tracking-wider px-2 pt-4 pb-2">Direct Messages</div>
+                      {dmChannelsWithUsers.length === 0 ? (
+                         <div className="text-center p-4 text-sm text-[#8e9297] mt-4">You have no open DMs. Click a user in a server to start chatting!</div>
+                      ) : null}
+                      {dmChannelsWithUsers.map(ch => (
+                        <button 
+                          key={ch.id} 
+                          type="button"
+                          onClick={() => { setActiveChannelId(ch.id); setLeftMenuOpen(false); }}
+                          className={"w-full flex items-center gap-3 px-2 py-1.5 mb-0.5 rounded transition-colors " + (activeChannelId === ch.id ? 'bg-white/10 text-white font-medium' : 'text-[#8e9297] hover:bg-white/5 hover:text-[#dcddde]')}
+                        >
+                          <div className="relative shrink-0 w-8 h-8">
+                             <img src={ch.targetUser.avatar || 'pfp.png'} className="w-8 h-8 rounded-full object-cover bg-[#202225]" style={getAvatarStyle(ch.targetUser.avatar, ch.targetUser.username)} />
+                             <div className={"absolute -bottom-0.5 -right-0.5 w-3 h-3 border-2 border-[#2f3136] rounded-full transition-colors " + (ch.targetUser.status === 'online' ? 'bg-[#3ba55c]' : 'bg-[#747f8d]')} />
+                          </div>
+                          <span className="truncate">{ch.targetUser.username}</span>
+                        </button>
+                      ))}
+                    </React.Fragment>
                   )}
                 </div>
 
                 {/* User Controls Panel */}
-                <div className="h-[52px] bg-[#292b2f] flex items-center px-2 gap-2 border-t border-black/20">
+                <div className="h-[52px] bg-[#292b2f] flex items-center px-2 gap-2 border-t border-black/20 shrink-0">
                   <button type="button" onClick={() => setModals(m => ({ ...m, profile: profile }))} className="flex items-center gap-2 flex-1 min-w-0 hover:bg-white/10 p-1 rounded transition-colors text-left">
                     <div className="relative shrink-0 w-8 h-8">
                       <img src={profile.avatar || 'pfp.png'} alt="Avatar" className="w-8 h-8 rounded-full bg-[#202225] object-cover" style={getAvatarStyle(profile.avatar, profile.username)} />
@@ -743,13 +803,28 @@
                     <button type="button" className="md:hidden p-1 mr-1 text-[#b9bbbe] hover:text-white shrink-0" onClick={() => setLeftMenuOpen(true)}>
                       <Menu size={20} />
                     </button>
-                    <Hash className="text-[#8e9297] shrink-0" size={24} />
-                    <span className="font-bold text-white truncate">{activeChannel ? activeChannel.name : 'select-channel'}</span>
+                    {activeChannelInfo.isDM ? (
+                       <img src={activeChannelInfo.avatar || 'pfp.png'} className="w-6 h-6 rounded-full object-cover shrink-0" style={getAvatarStyle(activeChannelInfo.avatar, activeChannelInfo.name)} />
+                    ) : (
+                       <Hash className="text-[#8e9297] shrink-0" size={24} />
+                    )}
+                    <span className="font-bold text-white truncate">{activeChannelInfo.name}</span>
                   </div>
-                  <div className="flex items-center gap-3 md:gap-4 text-[#b9bbbe] shrink-0">
-                    <Search size={20} className="hover:text-white cursor-pointer" onClick={() => showToast("Search coming soon!", "info")} />
-                    <Bell size={20} className="hover:text-white cursor-pointer hidden sm:block" onClick={() => showToast("Notifications coming soon!", "info")} />
-                    <Users size={20} className={membersSidebarOpen ? 'text-white cursor-pointer' : 'hover:text-white cursor-pointer'} onClick={() => setMembersSidebarOpen(!membersSidebarOpen)} />
+                  <div className="flex items-center gap-3 md:gap-4 text-[#b9bbbe] shrink-0 relative">
+                    <button type="button" onClick={() => setModals(m => ({ ...m, search: true }))} className="hover:text-white p-1 rounded hover:bg-white/10 transition-colors">
+                      <Search size={20} />
+                    </button>
+                    
+                    <button type="button" onClick={() => setModals(m => ({ ...m, notifications: true }))} className="hover:text-white p-1 rounded hover:bg-white/10 transition-colors relative">
+                      <Bell size={20} />
+                      {myNotifications.length > 0 && <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-[#ed4245] rounded-full border-2 border-[#36393f]"></span>}
+                    </button>
+
+                    {context === 'server' && (
+                      <button type="button" className={membersSidebarOpen ? 'text-white p-1 bg-white/10 rounded' : 'hover:text-white p-1 rounded hover:bg-white/10 transition-colors'} onClick={() => setMembersSidebarOpen(!membersSidebarOpen)}>
+                        <Users size={20} />
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -852,7 +927,7 @@
                           type="text" 
                           value={inputText}
                           onChange={(e) => setInputText(e.target.value)}
-                          placeholder={"Message #" + (activeChannel ? activeChannel.name : '')}
+                          placeholder={"Message " + (activeChannelInfo.isDM ? "@" : "#") + activeChannelInfo.name}
                           className="flex-1 bg-transparent text-white placeholder-[#72767d] focus:outline-none px-2 py-1 min-w-0"
                           autoComplete="off"
                         />
@@ -870,29 +945,101 @@
             )}
           </div>
 
-          {/* 4. Members Sidebar (Right) - Mobile Overlay or Desktop Relative */}
-          <div className={`fixed inset-y-0 right-0 z-40 md:relative md:z-auto h-full w-60 bg-[#2f3136] flex flex-col shrink-0 overflow-y-auto border-l border-black/20 hide-scrollbar transform transition-transform duration-300 ${membersSidebarOpen ? 'translate-x-0' : 'translate-x-full hidden md:flex md:translate-x-0'}`}>
-            <div className="text-xs font-bold text-[#8e9297] uppercase tracking-wider px-4 pt-6 pb-2 border-b border-white/5 mb-2">
-              Global Users — {data.users.length}
-            </div>
-            {data.users.map(u => (
-              <div key={u.uid} onClick={() => { setModals(m => ({ ...m, profile: u })); setMembersSidebarOpen(false); }} className="flex items-center gap-3 px-4 py-2 mx-2 rounded hover:bg-white/5 cursor-pointer group">
-                <div className="relative shrink-0 w-8 h-8">
-                  <img src={u.avatar || 'pfp.png'} className="w-8 h-8 shrink-0 rounded-full bg-[#202225] object-cover" alt="" style={getAvatarStyle(u.avatar, u.username)} />
-                  <div className={"absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 border-[3px] border-[#2f3136] group-hover:border-[#33353b] rounded-full transition-colors " + (u.status === 'online' ? 'bg-[#3ba55c]' : 'bg-[#747f8d]')} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[#8e9297] group-hover:text-[#dcddde] font-medium truncate flex items-center gap-1">
-                    {u.username}
-                    {u.isAdmin ? <span className="bg-amber-400 text-black text-[8px] px-1 rounded-sm tracking-wider font-bold">ADMIN</span> : null}
+          {/* 4. Members Sidebar (Right) */}
+          {context === 'server' && membersSidebarOpen ? (
+            <div className={`fixed inset-y-0 right-0 z-40 md:relative md:z-auto h-full w-60 bg-[#2f3136] flex flex-col shrink-0 overflow-y-auto border-l border-black/20 hide-scrollbar transform transition-transform duration-300 ${membersSidebarOpen ? 'translate-x-0' : 'translate-x-full hidden md:flex md:translate-x-0'}`}>
+              <div className="text-xs font-bold text-[#8e9297] uppercase tracking-wider px-4 pt-6 pb-2 border-b border-white/5 mb-2">
+                Global Users — {data.users.length}
+              </div>
+              {data.users.map(u => (
+                <div key={u.uid} onClick={() => { setModals(m => ({ ...m, profile: u })); setMembersSidebarOpen(false); }} className="flex items-center gap-3 px-4 py-2 mx-2 rounded hover:bg-white/5 cursor-pointer group">
+                  <div className="relative shrink-0 w-8 h-8">
+                    <img src={u.avatar || 'pfp.png'} className="w-8 h-8 shrink-0 rounded-full bg-[#202225] object-cover" alt="" style={getAvatarStyle(u.avatar, u.username)} />
+                    <div className={"absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 border-[3px] border-[#2f3136] group-hover:border-[#33353b] rounded-full transition-colors " + (u.status === 'online' ? 'bg-[#3ba55c]' : 'bg-[#747f8d]')} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[#8e9297] group-hover:text-[#dcddde] font-medium truncate flex items-center gap-1">
+                      {u.username}
+                      {u.isAdmin ? <span className="bg-amber-400 text-black text-[8px] px-1 rounded-sm tracking-wider font-bold">ADMIN</span> : null}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : null}
 
           {/* --- Modals --- */}
           
+          {/* Global Search Modal */}
+          {modals.search ? (
+             <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4" onClick={() => setModals(m => ({ ...m, search: false }))}>
+               <div className="bg-[#36393f] w-full max-w-2xl h-[80vh] rounded-lg shadow-2xl flex flex-col border border-white/5" onClick={e => e.stopPropagation()}>
+                 <div className="p-4 border-b border-black/20 flex items-center gap-3 shrink-0">
+                    <Search className="text-[#8e9297] shrink-0" />
+                    <input autoFocus type="text" placeholder="Search all messages globally..." className="bg-transparent text-white w-full outline-none text-lg" onChange={(e) => setSearchQuery(e.target.value)} />
+                    <button type="button" className="shrink-0 p-1 bg-white/10 hover:bg-white/20 rounded" onClick={() => setModals(m => ({ ...m, search: false }))}><X className="text-[#dcddde]" size={20} /></button>
+                 </div>
+                 <div className="flex-1 overflow-y-auto p-4 hide-scrollbar">
+                    {searchQuery.trim() === '' ? (
+                       <div className="text-center text-[#8e9297] mt-10">Type something to search through all loaded messages.</div>
+                    ) : searchResults.length === 0 ? (
+                       <div className="text-center text-[#8e9297] mt-10">No messages matched your search.</div>
+                    ) : (
+                       searchResults.map(msg => {
+                           const sender = data.users.find(u => u.uid === msg.senderId) || { username: 'Unknown User', avatar: 'pfp.png' };
+                           return (
+                               <div key={msg.id} className="mb-4 bg-[#2f3136] p-3 rounded border border-white/5 cursor-pointer hover:border-[#5865F2] transition-colors" onClick={() => {
+                                  setActiveChannelId(msg.channelId);
+                                  setModals(m => ({...m, search: false}));
+                               }}>
+                                  <div className="flex items-center gap-2 mb-1">
+                                      <img src={sender.avatar} style={getAvatarStyle(sender.avatar, sender.username)} className="w-5 h-5 rounded-full object-cover shrink-0" />
+                                      <span className="font-bold text-sm text-white">{sender.username}</span>
+                                      <span className="text-xs text-[#72767d] ml-auto">{new Date(msg.timestamp).toLocaleDateString()}</span>
+                                  </div>
+                                  <div className="text-[#dcddde] text-sm line-clamp-2">{msg.text || '[Image Attachment]'}</div>
+                               </div>
+                           )
+                       })
+                    )}
+                 </div>
+               </div>
+             </div>
+          ) : null}
+
+          {/* Notifications Modal */}
+          {modals.notifications ? (
+             <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4" onClick={() => setModals(m => ({ ...m, notifications: false }))}>
+               <div className="bg-[#36393f] w-full max-w-sm max-h-[80vh] rounded-lg shadow-2xl flex flex-col border border-white/5" onClick={e => e.stopPropagation()}>
+                 <div className="p-4 border-b border-black/20 flex items-center justify-between shrink-0">
+                    <h2 className="font-bold text-white flex items-center gap-2"><Bell size={20} className="text-[#5865F2]" /> Notifications</h2>
+                    <button type="button" className="shrink-0 p-1 hover:bg-white/10 rounded" onClick={() => setModals(m => ({ ...m, notifications: false }))}><X className="text-[#8e9297]" size={20} /></button>
+                 </div>
+                 <div className="flex-1 overflow-y-auto p-4 hide-scrollbar">
+                    {myNotifications.length === 0 ? (
+                       <div className="text-center text-[#8e9297] my-10">You have no new notifications.</div>
+                    ) : (
+                       myNotifications.map(msg => {
+                           const sender = data.users.find(u => u.uid === msg.senderId) || { username: 'Unknown User', avatar: 'pfp.png' };
+                           return (
+                               <div key={msg.id} className="mb-3 bg-[#2f3136] p-3 rounded border-l-4 border-l-[#5865F2] cursor-pointer hover:bg-[#202225] transition-colors" onClick={() => {
+                                  switchContext('home');
+                                  setActiveChannelId(msg.channelId);
+                                  setModals(m => ({...m, notifications: false}));
+                               }}>
+                                  <div className="text-xs text-[#b9bbbe] mb-1">New Direct Message from <strong>{sender.username}</strong></div>
+                                  <div className="text-[#dcddde] text-sm truncate">{msg.text || '[Image Attachment]'}</div>
+                                  <div className="text-[10px] text-[#72767d] mt-1">{new Date(msg.timestamp).toLocaleString()}</div>
+                               </div>
+                           )
+                       })
+                    )}
+                 </div>
+               </div>
+             </div>
+          ) : null}
+
+          {/* Server Settings */}
           {modals.serverSettings && activeServer ? (
             <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4" onClick={() => setModals(m => ({ ...m, serverSettings: false }))}>
               <div className="bg-[#36393f] w-full max-w-md rounded-lg p-6 shadow-2xl border border-white/5" onClick={e => e.stopPropagation()}>
@@ -924,6 +1071,7 @@
             </div>
           ) : null}
 
+          {/* Create Server Modal */}
           {modals.createServer ? (
             <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4" onClick={() => setModals(m => ({ ...m, createServer: false }))}>
               <div className="bg-[#36393f] w-full max-w-md rounded-lg p-6 shadow-2xl border border-white/5" onClick={e => e.stopPropagation()}>
@@ -943,6 +1091,7 @@
             </div>
           ) : null}
 
+          {/* Create Channel Modal */}
           {modals.createChannel ? (
             <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4" onClick={() => setModals(m => ({ ...m, createChannel: false }))}>
               <div className="bg-[#36393f] w-full max-w-md rounded-lg p-6 shadow-2xl border border-white/5" onClick={e => e.stopPropagation()}>
@@ -967,14 +1116,15 @@
             </div>
           ) : null}
 
+          {/* User Profile Modal */}
           {modals.profile ? (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4" onClick={() => setModals(m => ({ ...m, profile: null }))}>
-              <div className="w-full max-w-[340px] bg-[#292b2f] rounded-lg shadow-2xl overflow-hidden border border-[#202225] animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-                <div className="h-24 bg-gradient-to-r from-[#5865F2] to-purple-600 relative shrink-0" />
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4" onClick={() => { setModals(m => ({ ...m, profile: null })); setProfileMenuOpen(false); }}>
+              <div className="w-full max-w-[340px] bg-[#292b2f] rounded-lg shadow-2xl overflow-visible border border-[#202225] animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                <div className="h-24 bg-gradient-to-r from-[#5865F2] to-purple-600 relative shrink-0 rounded-t-lg" />
                 <div className="px-4 pb-4 relative">
                   <div className="absolute -top-12 left-4 rounded-full border-[6px] border-[#292b2f] bg-[#292b2f] w-[92px] h-[92px] shrink-0">
                     <img src={modals.profile.avatar || 'pfp.png'} className="w-full h-full rounded-full object-cover bg-[#202225] shrink-0" alt="User Avatar" style={getAvatarStyle(modals.profile.avatar, modals.profile.username)} />
-                    <div className="absolute bottom-1 right-1 w-5 h-5 bg-[#3ba55c] border-[3px] border-[#292b2f] rounded-full" />
+                    <div className={"absolute bottom-1 right-1 w-5 h-5 border-[3px] border-[#292b2f] rounded-full " + (modals.profile.status === 'online' ? 'bg-[#3ba55c]' : 'bg-[#747f8d]')} />
                   </div>
                   
                   <div className="bg-[#1a1d21] rounded-lg p-3 mt-16 mb-4 border border-white/5">
@@ -1001,17 +1151,25 @@
                       Edit User Profile
                     </button>
                   ) : (
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => { 
-                        switchContext('home'); 
-                        setModals(m => ({ ...m, profile: null })); 
-                        showToast(`Opened Direct Messages. Send ${modals.profile.username} a message!`, "success");
-                      }} className="flex-1 bg-[#5865F2] hover:bg-[#4752c4] text-white py-2 rounded text-sm font-medium transition-colors">
+                    <div className="flex gap-2 relative">
+                      <button type="button" onClick={() => handleStartDM(modals.profile)} className="flex-1 bg-[#5865F2] hover:bg-[#4752c4] text-white py-2 rounded text-sm font-medium transition-colors">
                         Send Message
                       </button>
-                      <button type="button" className="bg-[#4f545c] hover:bg-[#5d6269] px-3 rounded transition-colors text-white flex items-center justify-center shrink-0" title="More Options" onClick={() => showToast("Options menu coming soon.", "info")}>
+                      <button type="button" onClick={() => setProfileMenuOpen(!profileMenuOpen)} className="bg-[#4f545c] hover:bg-[#5d6269] px-3 rounded transition-colors text-white flex items-center justify-center shrink-0">
                          <span className="font-bold tracking-widest leading-none block transform -translate-y-1">...</span>
                       </button>
+
+                      {/* Dropdown Menu for Other Users */}
+                      {profileMenuOpen && (
+                         <div className="absolute bottom-full right-0 mb-2 w-48 bg-[#18191c] rounded shadow-xl border border-white/5 py-1 z-[110]">
+                            <button type="button" className="w-full text-left px-3 py-2 text-sm text-[#ed4245] hover:bg-[#ed4245] hover:text-white transition-colors flex items-center gap-2" onClick={() => { showToast(`You blocked ${modals.profile.username}.`, "error"); setProfileMenuOpen(false); }}>
+                                <ShieldBan size={14} /> Block User
+                            </button>
+                            <button type="button" className="w-full text-left px-3 py-2 text-sm text-[#ed4245] hover:bg-[#ed4245] hover:text-white transition-colors flex items-center gap-2" onClick={() => { showToast(`Reported ${modals.profile.username} to Trust & Safety.`, "error"); setProfileMenuOpen(false); }}>
+                                <AlertCircle size={14} /> Report User
+                            </button>
+                         </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1019,6 +1177,7 @@
             </div>
           ) : null}
 
+          {/* Personal Settings */}
           {modals.settings ? (
             <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4" onClick={() => setModals(m => ({ ...m, settings: false }))}>
               <div className="bg-[#36393f] w-full max-w-2xl h-full max-h-[85vh] rounded-lg shadow-2xl flex flex-col md:flex-row overflow-hidden border border-white/10" onClick={e => e.stopPropagation()}>
@@ -1027,10 +1186,10 @@
                 <div className="w-full md:w-1/3 bg-[#2f3136] p-4 md:p-6 flex flex-row md:flex-col overflow-x-auto hide-scrollbar shrink-0 border-b md:border-b-0 md:border-r border-black/20">
                   <div className="hidden md:block text-xs font-bold text-[#8e9297] uppercase mb-2 px-2">User Settings</div>
                   <div className="bg-[#393c43] text-white px-3 py-1.5 rounded mr-2 md:mr-0 md:mb-1 cursor-pointer font-medium whitespace-nowrap shrink-0">My Account</div>
-                  <div className="text-[#b9bbbe] hover:bg-white/5 px-3 py-1.5 rounded mr-2 md:mr-0 md:mb-4 cursor-pointer whitespace-nowrap shrink-0">Profiles</div>
+                  <div className="text-[#b9bbbe] hover:bg-white/5 px-3 py-1.5 rounded mr-2 md:mr-0 md:mb-4 cursor-pointer whitespace-nowrap shrink-0" onClick={() => showToast("Profiles settings coming soon", "info")}>Profiles</div>
                   <div className="hidden md:block text-xs font-bold text-[#8e9297] uppercase mb-2 px-2 md:mt-4">App Settings</div>
-                  <div className="text-[#b9bbbe] hover:bg-white/5 px-3 py-1.5 rounded mr-2 md:mr-0 md:mb-1 cursor-pointer whitespace-nowrap shrink-0">Appearance</div>
-                  <div className="text-[#b9bbbe] hover:bg-white/5 px-3 py-1.5 rounded md:mb-1 cursor-pointer whitespace-nowrap shrink-0">Notifications</div>
+                  <div className="text-[#b9bbbe] hover:bg-white/5 px-3 py-1.5 rounded mr-2 md:mr-0 md:mb-1 cursor-pointer whitespace-nowrap shrink-0" onClick={() => showToast("Appearance settings coming soon", "info")}>Appearance</div>
+                  <div className="text-[#b9bbbe] hover:bg-white/5 px-3 py-1.5 rounded md:mb-1 cursor-pointer whitespace-nowrap shrink-0" onClick={() => showToast("Notification settings coming soon", "info")}>Notifications</div>
                   
                   <div className="hidden md:block mt-auto border-t border-white/10 pt-4">
                      <button type="button" onClick={handleLogout} className="flex items-center justify-center gap-2 bg-[#ed4245] hover:bg-[#c9383b] text-white px-3 py-2 rounded w-full transition-colors font-bold shadow-sm">
