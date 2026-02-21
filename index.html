@@ -183,16 +183,19 @@
           notifications: false
       });
 
-      // Fetch from Supabase and listen for Realtime changes
+      // 1. Setup Auth Listener (Manage session and auth state)
       useEffect(() => {
         if (supabaseUrl === 'YOUR_SUPABASE_URL') {
             setIsLoading(false);
             return;
         }
 
-        // 1. Setup Auth Listener (Automatically manages sessions)
         supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session) setUser({ uid: session.user.id });
+            if (session) {
+                setUser({ uid: session.user.id });
+            } else {
+                setIsLoading(false);
+            }
         });
 
         const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
@@ -200,10 +203,21 @@
                 setUser({ uid: session.user.id });
             } else {
                 setUser(null);
+                setIsLoading(false);
             }
         });
 
-        // 2. Fetch Chat Data
+        return () => { 
+            authListener.subscription.unsubscribe();
+        };
+      }, []);
+
+      // 2. Fetch Chat Data & Listen for Realtime changes (Runs automatically upon login)
+      useEffect(() => {
+        if (!user?.uid || supabaseUrl === 'YOUR_SUPABASE_URL') return;
+
+        let channel;
+
         const fetchInitialData = async () => {
             const [usersReq, serversReq, channelsReq, messagesReq] = await Promise.all([
                 supabase.from('users').select('*'),
@@ -219,39 +233,38 @@
                 messages: messagesReq.data || []
             });
             setIsLoading(false);
+
+            // Subscribe to ALL Postgres changes across our 4 tables
+            channel = supabase.channel('db-changes')
+              .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
+                const table = payload.table;
+                const eventType = payload.eventType;
+                const newRecord = payload.new;
+                const oldRecord = payload.old;
+
+                setData(prev => {
+                  const next = Object.assign({}, prev);
+                  if (!next[table]) return prev;
+
+                  if (eventType === 'INSERT') {
+                    next[table] = [...next[table], newRecord];
+                  } else if (eventType === 'UPDATE') {
+                    next[table] = next[table].map(item => item.id === newRecord.id ? newRecord : item);
+                  } else if (eventType === 'DELETE') {
+                    next[table] = next[table].filter(item => item.id !== oldRecord.id);
+                  }
+                  return next;
+                });
+              })
+              .subscribe();
         };
 
         fetchInitialData();
 
-        // Subscribe to ALL Postgres changes across our 4 tables
-        const channel = supabase.channel('db-changes')
-          .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
-            const table = payload.table;
-            const eventType = payload.eventType;
-            const newRecord = payload.new;
-            const oldRecord = payload.old;
-
-            setData(prev => {
-              const next = Object.assign({}, prev);
-              if (!next[table]) return prev;
-
-              if (eventType === 'INSERT') {
-                next[table] = [...next[table], newRecord];
-              } else if (eventType === 'UPDATE') {
-                next[table] = next[table].map(item => item.id === newRecord.id ? newRecord : item);
-              } else if (eventType === 'DELETE') {
-                next[table] = next[table].filter(item => item.id !== oldRecord.id);
-              }
-              return next;
-            });
-          })
-          .subscribe();
-
         return () => { 
-            supabase.removeChannel(channel); 
-            authListener.subscription.unsubscribe();
+            if (channel) supabase.removeChannel(channel); 
         };
-      }, []);
+      }, [user?.uid]);
 
       const activeServer = useMemo(() => data.servers.find(s => s.id === activeServerId), [data.servers, activeServerId]);
       const serverChannels = useMemo(() => data.channels.filter(c => c.serverId === activeServerId).sort((a,b) => a.createdAt - b.createdAt), [data.channels, activeServerId]);
