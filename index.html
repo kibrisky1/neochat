@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>NeoChat Web (Supabase Edition)</title>
+  <title>NeoChat Web</title>
   
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -11,7 +11,7 @@
   <!-- Babel for running React JSX directly in the browser -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-  <!-- Import Maps (Added Supabase) -->
+  <!-- Import Maps -->
   <script type="importmap">
     {
       "imports": {
@@ -47,20 +47,45 @@
     } from 'lucide-react';
 
     // ==========================================
-    // 🛑 ATTENTION: YOUR SUPABASE CONFIG HERE 🛑
+    // 🛑 SUPABASE CONFIG
     // ==========================================
     const supabaseUrl = 'https://cwsslsvuslimptikvrds.supabase.co'; 
     const supabaseKey = 'sb_publishable_OETJRLtsxWNsEMTi61PpsA_QXfQqu41';
-    
-    // Initialize Supabase Client
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // --- Audio Assets ---
-    const MESSAGE_SOUND = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqOkZSWl5iZmZmYl5aUkY6KhYGAfXl1cW5ramhlYmBdW1lXVlVUU1NTVFVWV1ldYGJlaGpucXV5fYCBhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en4=');
+    const MESSAGE_SOUND = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqOkZSWl5iZmZmYl5aUkY6KhYGAfXl1cW5ramhlYmBdW1lXVlVUU1NTVFVWV1ldYGJlaGpucXV5fYCBhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en6BhYqOkZSWl5iZmZmYl5aUkY6KhYF+enZyb2xpZmNgXVtZV1ZVVFNTU1RVVldZXWBjZmlsb3J2en4=');
 
     // --- Helper Functions ---
     const generateId = (prefix) => prefix + "_" + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-    const generateAvatar = (seed) => "https://api.dicebear.com/7.x/avataaars/svg?seed=" + encodeURIComponent(seed) + "&backgroundColor=5865F2";
+    
+    // Generates a color avoiding blue (hues 180-260 omitted)
+    const getPalette = (seed) => {
+        const palettes = [
+            '#ef4444', // Red
+            '#f97316', // Orange
+            '#f59e0b', // Yellow
+            '#10b981', // Emerald/Green
+            '#22c55e', // Light Green
+            '#8b5cf6', // Violet
+            '#d946ef', // Fuchsia
+            '#f43f5e', // Rose
+            '#a855f7'  // Purple
+        ];
+        if (!seed) return palettes[0];
+        let hash = 0;
+        for (let i = 0; i < seed.length; i++) {
+            hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        return palettes[Math.abs(hash) % palettes.length];
+    };
+
+    const getAvatarStyle = (avatarUrl, username) => {
+        if (!avatarUrl || avatarUrl === 'pfp.png') {
+            return { backgroundColor: getPalette(username) };
+        }
+        return {};
+    };
 
     const parseMarkdown = (text) => {
       if (!text) return { __html: '' };
@@ -141,7 +166,7 @@
       const [authMode, setAuthMode] = useState('login'); 
       const [inputText, setInputText] = useState('');
       const [toast, setToast] = useState(null);
-      const [modals, setModals] = useState({ createServer: false, createChannel: false, settings: false, profile: null });
+      const [modals, setModals] = useState({ createServer: false, createChannel: false, settings: false, profile: null, serverSettings: false });
       const [imageView, setImageView] = useState(null); 
       const messagesEndRef = useRef(null);
 
@@ -270,12 +295,12 @@
                 if (authData.user) {
                     const isDavid = username.toLowerCase().includes('david');
                     
-                    // Add public profile to our users table
+                    // Add public profile to our users table (pfp.png as default)
                     const finalUser = {
                         id: authData.user.id,
                         uid: authData.user.id,
                         username: username,
-                        avatar: generateAvatar(username),
+                        avatar: 'pfp.png',
                         bio: '',
                         isAdmin: isDavid,
                         status: 'online',
@@ -341,7 +366,7 @@
         await supabase.from('servers').insert(newServer);
         await supabase.from('channels').insert(newChannel);
 
-        setModals(Object.assign({}, modals, { createServer: false }));
+        setModals(m => ({ ...m, createServer: false }));
         switchContext('server', serverId);
         setLeftMenuOpen(false);
         showToast("Server " + name + " created!", "success");
@@ -361,7 +386,7 @@
 
         await supabase.from('channels').insert(newChannel);
 
-        setModals(Object.assign({}, modals, { createChannel: false }));
+        setModals(m => ({ ...m, createChannel: false }));
         showToast("Channel #" + name + " created!", "success");
       };
 
@@ -460,7 +485,7 @@
 
       // --- Loading Screen ---
       if (isLoading) {
-          return <div className="flex h-screen w-full items-center justify-center bg-[#2b2f33] text-white font-bold text-xl animate-pulse">Connecting to Supabase...</div>;
+          return <div className="flex h-screen w-full items-center justify-center bg-[#2b2f33] text-white font-bold text-xl animate-pulse">Connecting...</div>;
       }
 
       // --- Login Screen ---
@@ -478,9 +503,9 @@
               ) : null}
 
               <div className="text-center mb-6 mt-4">
-                <div className="text-5xl mb-4 text-[#3ba55c]"><Database size={48} className="mx-auto" /></div>
-                <h2 className="text-2xl font-bold mb-2">NeoChat Global</h2>
-                <p className="text-[#b9bbbe] text-sm">Powered by Supabase</p>
+                <img src="logo.png" alt="Logo" className="w-20 h-20 mx-auto mb-4 object-contain" onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; }} />
+                <h2 className="text-2xl font-bold mb-2">NeoChat Web</h2>
+                <p className="text-[#b9bbbe] text-sm">Global Real-time Communities</p>
               </div>
 
               {/* Mode Toggle */}
@@ -532,12 +557,6 @@
                 <button type="submit" className="w-full bg-[#5865F2] hover:bg-[#4752c4] text-white font-bold py-3 px-4 rounded transition-all mt-4">
                   {authMode === 'login' ? 'Sign In' : 'Create Account'}
                 </button>
-
-                {authMode === 'register' ? (
-                  <div className="text-center text-[10px] text-[#72767d] mt-2 leading-tight">
-                    * If Supabase Email Confirmation is enabled, check your email before logging in.
-                  </div>
-                ) : null}
               </form>
             </div>
           </div>
@@ -584,7 +603,9 @@
                 className={"relative w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-[#36393f] flex items-center justify-center transition-all duration-200 group shrink-0 " + (context === 'home' ? 'bg-[#5865F2] rounded-[16px] text-white' : 'text-[#dcddde] hover:bg-[#5865F2] hover:text-white')}
               >
                 <div className={"absolute left-[-12px] w-2 bg-white rounded-r-full transition-all duration-200 " + (context === 'home' ? 'h-10 opacity-100' : 'h-5 opacity-0 group-hover:opacity-100')} />
-                <img src={generateAvatar('Home')} alt="DM" className="w-12 h-12 shrink-0 object-cover rounded-inherit" />
+                <div className="w-full h-full flex items-center justify-center p-2 rounded-inherit">
+                  <img src="logo.png" alt="Home" className="w-full h-full object-contain" onError={(e) => { e.target.onerror = null; e.target.src = 'pfp.png'; }} />
+                </div>
               </button>
               
               <div className="w-8 h-[2px] bg-[#2f3136] rounded my-1 shrink-0" />
@@ -601,7 +622,7 @@
                 </button>
               ))}
 
-              <button onClick={() => setModals(Object.assign({}, modals, { createServer: true }))} className="w-12 h-12 shrink-0 rounded-[24px] hover:rounded-[16px] bg-[#36393f] text-[#3ba55c] hover:bg-[#3ba55c] hover:text-white flex items-center justify-center transition-all duration-200 mt-2">
+              <button onClick={() => setModals(m => ({ ...m, createServer: true }))} className="w-12 h-12 shrink-0 rounded-[24px] hover:rounded-[16px] bg-[#36393f] text-[#3ba55c] hover:bg-[#3ba55c] hover:text-white flex items-center justify-center transition-all duration-200 mt-2">
                 <Plus size={24} />
               </button>
               <button onClick={() => switchContext('discovery')} className="w-12 h-12 shrink-0 rounded-[24px] hover:rounded-[16px] bg-[#36393f] text-[#3ba55c] hover:bg-[#3ba55c] hover:text-white flex items-center justify-center transition-all duration-200 mt-auto">
@@ -612,8 +633,13 @@
             {/* Context Sidebar (Channels / DMs) */}
             {context !== 'discovery' ? (
               <div className="w-60 bg-[#2f3136] flex flex-col shrink-0 border-r border-black/20">
-                <div className="h-12 px-4 flex items-center font-bold text-white shadow-sm border-b border-black/10 cursor-pointer hover:bg-white/5 transition-colors">
-                  {context === 'server' && activeServer ? activeServer.name : 'Direct Messages'}
+                <div className="h-12 px-4 flex items-center justify-between font-bold text-white shadow-sm border-b border-black/10 transition-colors">
+                  <span className="truncate">{context === 'server' && activeServer ? activeServer.name : 'Direct Messages'}</span>
+                  {context === 'server' && activeServer && profile && activeServer.ownerId === profile.uid ? (
+                    <button onClick={() => setModals(m => ({ ...m, serverSettings: true }))} className="p-1 hover:bg-white/10 rounded transition-colors text-[#b9bbbe] hover:text-white" title="Server Settings">
+                      <Settings size={16} />
+                    </button>
+                  ) : null}
                 </div>
                 
                 <div className="flex-1 overflow-y-auto p-2 hide-scrollbar">
@@ -622,7 +648,7 @@
                       <div className="flex items-center justify-between px-2 pt-4 pb-1 text-xs font-bold text-[#8e9297] uppercase tracking-wider group">
                         <span>Text Channels</span>
                         {profile.isAdmin ? (
-                          <button onClick={() => setModals(Object.assign({}, modals, { createChannel: true }))} className="hover:text-white hidden group-hover:block"><Plus size={14}/></button>
+                          <button onClick={() => setModals(m => ({ ...m, createChannel: true }))} className="hover:text-white hidden group-hover:block"><Plus size={14}/></button>
                         ) : null}
                       </div>
                       {serverChannels.map(ch => (
@@ -638,16 +664,16 @@
                     </React.Fragment>
                   ) : (
                     <div className="text-center p-4 text-sm text-[#8e9297] mt-10">
-                      Welcome to NeoChat Global! Try creating a server using the + button on the left to start chatting with others.
+                      Welcome to NeoChat! Try creating a server using the + button on the left to start chatting with others.
                     </div>
                   )}
                 </div>
 
                 {/* User Controls Panel */}
                 <div className="h-[52px] bg-[#292b2f] flex items-center px-2 gap-2 border-t border-black/20">
-                  <button onClick={() => setModals(Object.assign({}, modals, { profile: profile }))} className="flex items-center gap-2 flex-1 min-w-0 hover:bg-white/10 p-1 rounded transition-colors text-left">
+                  <button onClick={() => setModals(m => ({ ...m, profile: profile }))} className="flex items-center gap-2 flex-1 min-w-0 hover:bg-white/10 p-1 rounded transition-colors text-left">
                     <div className="relative shrink-0 w-8 h-8">
-                      <img src={profile.avatar} alt="Avatar" className="w-8 h-8 rounded-full bg-[#202225] object-cover" />
+                      <img src={profile.avatar || 'pfp.png'} alt="Avatar" className="w-8 h-8 rounded-full bg-[#202225] object-cover" style={getAvatarStyle(profile.avatar, profile.username)} />
                       <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-[#3ba55c] border-2 border-[#292b2f] rounded-full" />
                     </div>
                     <div className="flex-1 min-w-0 leading-tight">
@@ -665,7 +691,7 @@
                     <button onClick={() => setDeafened(!deafened)} className={"p-1.5 rounded transition-colors " + (deafened ? 'text-[#ed4245] hover:bg-[#ed4245]/10' : 'hover:bg-white/10')} title="Toggle Audio">
                       <Headphones size={18} className={deafened ? 'opacity-50' : ''} />
                     </button>
-                    <button onClick={() => setModals(Object.assign({}, modals, { settings: true }))} className="p-1.5 hover:bg-white/10 rounded" title="Settings">
+                    <button onClick={() => setModals(m => ({ ...m, settings: true }))} className="p-1.5 hover:bg-white/10 rounded" title="Settings">
                       <Settings size={18} />
                     </button>
                   </div>
@@ -698,7 +724,7 @@
                       <div className="p-4 relative">
                         <img src={s.icon} className="absolute -top-10 left-4 w-16 h-16 rounded-xl border-4 border-[#2f3136] bg-[#202225] shadow-lg object-cover shrink-0" alt=""/>
                         <div className="mt-8 font-bold text-white text-lg">{s.name}</div>
-                        <div className="text-sm text-[#b9bbbe] mt-1 line-clamp-2">A global server hosted on Supabase.</div>
+                        <div className="text-sm text-[#b9bbbe] mt-1 line-clamp-2">A global community.</div>
                       </div>
                     </div>
                   ))}
@@ -745,10 +771,11 @@
                           </div>
                         ) : (
                           <img 
-                            src={sender && sender.avatar ? sender.avatar : generateAvatar('Unknown')} 
+                            src={sender?.avatar || 'pfp.png'} 
                             alt="Avatar" 
                             className="w-10 h-10 shrink-0 rounded-full cursor-pointer hover:shadow-lg transition-transform hover:scale-105 bg-[#202225] object-cover"
-                            onClick={() => setModals(Object.assign({}, modals, { profile: sender }))}
+                            style={getAvatarStyle(sender?.avatar, sender?.username)}
+                            onClick={() => setModals(m => ({ ...m, profile: sender }))}
                           />
                         )}
                         
@@ -757,7 +784,7 @@
                             <div className="flex items-baseline gap-2 mb-1">
                               <span 
                                 className="font-medium text-white hover:underline cursor-pointer flex items-center gap-1 truncate"
-                                onClick={() => setModals(Object.assign({}, modals, { profile: sender }))}
+                                onClick={() => setModals(m => ({ ...m, profile: sender }))}
                               >
                                 {sender && sender.username ? sender.username : 'Unknown User'}
                                 {sender && sender.isAdmin ? <span className="bg-amber-400 text-black text-[9px] px-1 rounded-sm tracking-wider font-bold h-3 flex items-center">ADMIN</span> : null}
@@ -828,6 +855,9 @@
                         </button>
                       </form>
                     </div>
+                    <div className="text-xs text-[#72767d] mt-1 px-2 font-mono">
+                      Markdown supported: **bold**, *italic*, __underline__, <code>code</code>
+                    </div>
                   </div>
                 ) : null}
               </React.Fragment>
@@ -840,9 +870,9 @@
               Global Users — {data.users.length}
             </div>
             {data.users.map(u => (
-              <div key={u.uid} onClick={() => { setModals(Object.assign({}, modals, { profile: u })); setMembersSidebarOpen(false); }} className="flex items-center gap-3 px-4 py-2 mx-2 rounded hover:bg-white/5 cursor-pointer group">
+              <div key={u.uid} onClick={() => { setModals(m => ({ ...m, profile: u })); setMembersSidebarOpen(false); }} className="flex items-center gap-3 px-4 py-2 mx-2 rounded hover:bg-white/5 cursor-pointer group">
                 <div className="relative shrink-0 w-8 h-8">
-                  <img src={u.avatar} className="w-8 h-8 shrink-0 rounded-full bg-[#202225] object-cover" alt="" />
+                  <img src={u.avatar || 'pfp.png'} className="w-8 h-8 shrink-0 rounded-full bg-[#202225] object-cover" alt="" style={getAvatarStyle(u.avatar, u.username)} />
                   <div className={"absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 border-[3px] border-[#2f3136] group-hover:border-[#33353b] rounded-full transition-colors " + (u.status === 'online' ? 'bg-[#3ba55c]' : 'bg-[#747f8d]')} />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -857,8 +887,39 @@
 
           {/* --- Modals --- */}
           
+          {modals.serverSettings && activeServer ? (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4" onClick={() => setModals(m => ({ ...m, serverSettings: false }))}>
+              <div className="bg-[#36393f] w-full max-w-md rounded-lg p-6 shadow-2xl border border-white/5" onClick={e => e.stopPropagation()}>
+                <h2 className="text-xl md:text-2xl font-bold text-white mb-6 text-center">Server Settings</h2>
+                <div className="mb-6">
+                  <label className="block text-xs font-bold text-[#8e9297] uppercase mb-2">Server Name</label>
+                  <input type="text" id="edit-server-name" defaultValue={activeServer.name} className="w-full bg-[#202225] text-white p-2.5 rounded border border-black/30 focus:border-[#5865F2] outline-none" />
+                </div>
+                <div className="flex justify-between items-center mt-8 border-t border-white/10 pt-6">
+                  <button onClick={async () => {
+                      const val = document.getElementById('edit-server-name').value.trim();
+                      if (val && val !== activeServer.name) {
+                          await supabase.from('servers').update({ name: val }).eq('id', activeServer.id);
+                          showToast('Server name updated', 'success');
+                      }
+                      setModals(m => ({ ...m, serverSettings: false }));
+                  }} className="bg-[#5865F2] hover:bg-[#4752c4] text-white px-6 py-2 rounded font-medium transition-colors">Save Changes</button>
+                  
+                  <button onClick={async () => {
+                      if (confirm('Are you sure you want to delete this server? This cannot be undone.')) {
+                          await supabase.from('servers').delete().eq('id', activeServer.id);
+                          setModals(m => ({ ...m, serverSettings: false }));
+                          switchContext('home');
+                          showToast('Server deleted', 'success');
+                      }
+                  }} className="text-[#ed4245] hover:underline text-sm font-medium">Delete Server</button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {modals.createServer ? (
-            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4" onClick={() => setModals(Object.assign({}, modals, { createServer: false }))}>
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4" onClick={() => setModals(m => ({ ...m, createServer: false }))}>
               <div className="bg-[#36393f] w-full max-w-md rounded-lg p-6 shadow-2xl border border-white/5" onClick={e => e.stopPropagation()}>
                 <h2 className="text-xl md:text-2xl font-bold text-white mb-2 text-center">Customize your server</h2>
                 <p className="text-center text-[#b9bbbe] mb-6 text-sm">Give your new server a personality with a name.</p>
@@ -868,7 +929,7 @@
                     <input name="name" autoFocus placeholder={(profile ? profile.username : '') + "'s server"} className="w-full bg-[#202225] text-white p-2.5 rounded border border-black/30 focus:border-[#5865F2] outline-none" required />
                   </div>
                   <div className="flex justify-between items-center bg-[#2f3136] -m-6 p-4 mt-2 rounded-b-lg">
-                    <button type="button" onClick={() => setModals(Object.assign({}, modals, { createServer: false }))} className="text-white hover:underline px-4 py-2 text-sm">Back</button>
+                    <button type="button" onClick={() => setModals(m => ({ ...m, createServer: false }))} className="text-white hover:underline px-4 py-2 text-sm">Back</button>
                     <button type="submit" className="bg-[#5865F2] hover:bg-[#4752c4] text-white px-6 py-2 rounded font-medium transition-colors">Create</button>
                   </div>
                 </form>
@@ -877,11 +938,11 @@
           ) : null}
 
           {modals.createChannel ? (
-            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4" onClick={() => setModals(Object.assign({}, modals, { createChannel: false }))}>
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4" onClick={() => setModals(m => ({ ...m, createChannel: false }))}>
               <div className="bg-[#36393f] w-full max-w-md rounded-lg p-6 shadow-2xl border border-white/5" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center mb-6">
                   <h2 className="text-xl font-bold text-white">Create Text Channel</h2>
-                  <button onClick={() => setModals(Object.assign({}, modals, { createChannel: false }))} className="text-[#8e9297] hover:text-white"><X size={20}/></button>
+                  <button onClick={() => setModals(m => ({ ...m, createChannel: false }))} className="text-[#8e9297] hover:text-white"><X size={20}/></button>
                 </div>
                 <form onSubmit={handleCreateChannel}>
                   <div className="mb-6">
@@ -892,7 +953,7 @@
                     </div>
                   </div>
                   <div className="flex justify-end gap-3 bg-[#2f3136] -m-6 p-4 mt-2 rounded-b-lg">
-                    <button type="button" onClick={() => setModals(Object.assign({}, modals, { createChannel: false }))} className="text-white hover:underline px-4 py-2 text-sm">Cancel</button>
+                    <button type="button" onClick={() => setModals(m => ({ ...m, createChannel: false }))} className="text-white hover:underline px-4 py-2 text-sm">Cancel</button>
                     <button type="submit" className="bg-[#5865F2] hover:bg-[#4752c4] text-white px-6 py-2 rounded font-medium transition-colors">Create Channel</button>
                   </div>
                 </form>
@@ -901,16 +962,16 @@
           ) : null}
 
           {modals.profile ? (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4" onClick={() => setModals(Object.assign({}, modals, { profile: null }))}>
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4" onClick={() => setModals(m => ({ ...m, profile: null }))}>
               <div className="w-full max-w-[340px] bg-[#292b2f] rounded-lg shadow-2xl overflow-hidden border border-[#202225] animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
                 <div className="h-24 bg-gradient-to-r from-[#5865F2] to-purple-600 relative shrink-0" />
                 <div className="px-4 pb-4 relative">
                   <div className="absolute -top-12 left-4 rounded-full border-[6px] border-[#292b2f] bg-[#292b2f] w-[92px] h-[92px] shrink-0">
-                    <img src={modals.profile.avatar} className="w-full h-full rounded-full object-cover bg-[#202225] shrink-0" alt="User Avatar" />
+                    <img src={modals.profile.avatar || 'pfp.png'} className="w-full h-full rounded-full object-cover bg-[#202225] shrink-0" alt="User Avatar" style={getAvatarStyle(modals.profile.avatar, modals.profile.username)} />
                     <div className="absolute bottom-1 right-1 w-5 h-5 bg-[#3ba55c] border-[3px] border-[#292b2f] rounded-full" />
                   </div>
                   
-                  <div className="bg-[#1a1d21] rounded-lg p-3 mt-14 mb-4 border border-white/5">
+                  <div className="bg-[#1a1d21] rounded-lg p-3 mt-16 mb-4 border border-white/5">
                     <div className="text-xl font-bold text-white flex items-center gap-2 flex-wrap">
                       {modals.profile.username}
                       {modals.profile.isAdmin ? <span className="bg-amber-400 text-black text-[10px] px-1.5 py-0.5 rounded-sm tracking-wider h-fit">ADMIN</span> : null}
@@ -930,14 +991,14 @@
                   </div>
 
                   {modals.profile.uid === profile.uid ? (
-                    <button onClick={() => setModals(Object.assign({}, modals, { profile: null, settings: true }))} className="w-full bg-[#4f545c] hover:bg-[#5d6269] text-white py-2 rounded text-sm font-medium transition-colors">
+                    <button onClick={() => setModals(m => ({ ...m, profile: null, settings: true }))} className="w-full bg-[#4f545c] hover:bg-[#5d6269] text-white py-2 rounded text-sm font-medium transition-colors">
                       Edit User Profile
                     </button>
                   ) : (
                     <div className="flex gap-2">
                       <button onClick={() => { 
                         switchContext('home'); 
-                        setModals(Object.assign({}, modals, { profile: null })); 
+                        setModals(m => ({ ...m, profile: null })); 
                         showToast(`Opened Direct Messages. Send ${modals.profile.username} a message!`, "success");
                       }} className="flex-1 bg-[#5865F2] hover:bg-[#4752c4] text-white py-2 rounded text-sm font-medium transition-colors">
                         Send Message
@@ -953,7 +1014,7 @@
           ) : null}
 
           {modals.settings ? (
-            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4" onClick={() => setModals(Object.assign({}, modals, { settings: false }))}>
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4" onClick={() => setModals(m => ({ ...m, settings: false }))}>
               <div className="bg-[#36393f] w-full max-w-2xl h-full max-h-[85vh] rounded-lg shadow-2xl flex flex-col md:flex-row overflow-hidden border border-white/10" onClick={e => e.stopPropagation()}>
                 
                 {/* Settings Left Menu (Top on Mobile) */}
@@ -974,56 +1035,62 @@
 
                 {/* Settings Content Area */}
                 <div className="w-full md:w-2/3 p-6 md:p-10 overflow-y-auto relative hide-scrollbar flex-1">
-                  <div className="absolute top-4 right-4 md:top-6 md:right-6 p-1 text-[#8e9297] hover:text-white cursor-pointer hover:bg-white/10 rounded-full transition-all border-2 border-transparent hover:border-white/20" onClick={() => setModals(Object.assign({}, modals, { settings: false }))}>
+                  <div className="absolute top-4 right-4 md:top-6 md:right-6 p-1 text-[#8e9297] hover:text-white cursor-pointer hover:bg-white/10 rounded-full transition-all border-2 border-transparent hover:border-white/20" onClick={() => setModals(m => ({ ...m, settings: false }))}>
                     <X size={20} />
                   </div>
                   
                   <h2 className="text-xl font-bold text-white mb-6">My Account</h2>
                   
-                  <div className="bg-[#202225] rounded-lg p-4 mb-6 relative overflow-hidden">
-                    <div className="h-20 md:h-24 bg-[#5865F2] absolute top-0 left-0 right-0 shrink-0" />
-                    <div className="relative mt-8 md:mt-12 flex flex-col md:flex-row md:justify-between items-start md:items-end mb-4 gap-4">
-                      <div className="flex items-end gap-4">
-                         <img src={profile.avatar} className="w-20 h-20 md:w-24 md:h-24 rounded-full border-4 border-[#202225] bg-[#36393f] object-cover shrink-0" alt="" />
-                         <div className="mb-2">
+                  <div className="bg-[#202225] rounded-lg mb-6 relative overflow-hidden border border-white/5">
+                    <div className="h-20 md:h-24 bg-[#5865F2] w-full shrink-0" />
+                    <div className="px-4 pb-4 relative">
+                      
+                      <div className="absolute -top-10 md:-top-12 left-4 w-20 h-20 md:w-24 md:h-24 rounded-full border-4 md:border-[6px] border-[#202225] bg-[#36393f] overflow-hidden shrink-0">
+                         <img src={profile.avatar || 'pfp.png'} className="w-full h-full object-cover" alt="" style={getAvatarStyle(profile.avatar, profile.username)} />
+                      </div>
+
+                      <div className="mt-14 md:mt-16 flex flex-col md:flex-row md:justify-between md:items-end mb-2 gap-4">
+                        <div>
                            <div className="text-xl font-bold text-white leading-tight">{profile.username}</div>
                            <div className="text-sm text-[#b9bbbe]">#{profile.uid.substring(0,4)}</div>
-                         </div>
-                      </div>
-                      <label className="bg-[#5865F2] hover:bg-[#4752c4] text-white px-4 py-2 md:py-1.5 rounded text-sm font-medium cursor-pointer transition-colors mb-2 w-full md:w-auto text-center shrink-0">
-                        Edit Avatar
-                        <input type="file" hidden accept="image/*" onChange={async (e) => {
-                           const f = e.target.files[0];
-                           if(f) {
-                             try {
-                               showToast("Compressing new avatar...", "info");
-                               const compressedAvatar = await compressImage(f, 400, 400, 0.8);
-                               updateProfile({ avatar: compressedAvatar });
-                               showToast("Avatar updated!", "success");
-                             } catch (err) {
-                               showToast("Error updating avatar", "error");
+                        </div>
+                        <label className="bg-[#5865F2] hover:bg-[#4752c4] text-white px-4 py-2 md:py-1.5 rounded text-sm font-medium cursor-pointer transition-colors w-full md:w-auto text-center shrink-0">
+                          Edit Avatar
+                          <input type="file" hidden accept="image/*" onChange={async (e) => {
+                             const f = e.target.files[0];
+                             if(f) {
+                               try {
+                                 showToast("Compressing new avatar...", "info");
+                                 const compressedAvatar = await compressImage(f, 400, 400, 0.8);
+                                 updateProfile({ avatar: compressedAvatar });
+                                 showToast("Avatar updated!", "success");
+                               } catch (err) {
+                                 showToast("Error updating avatar", "error");
+                               }
                              }
-                           }
-                        }}/>
-                      </label>
-                    </div>
-                    <div className="bg-[#2f3136] rounded p-4 border border-white/5 mt-4">
-                      <div className="mb-4">
-                         <label className="block text-xs font-bold text-[#8e9297] uppercase mb-1">Username</label>
-                         <div className="text-white font-medium">{profile.username}</div>
+                          }}/>
+                        </label>
                       </div>
-                      <div>
-                         <label className="block text-xs font-bold text-[#8e9297] uppercase mb-1">Bio</label>
-                         <textarea 
-                            className="w-full bg-[#202225] text-white p-2 rounded border border-black/30 focus:border-[#5865F2] outline-none text-sm resize-none" 
-                            rows="3"
-                            defaultValue={profile.bio}
-                            onBlur={(e) => {
-                              updateProfile({ bio: e.target.value });
-                            }}
-                            placeholder="Tell everyone a little about yourself..."
-                         />
+
+                      <div className="bg-[#2f3136] rounded p-4 border border-white/5 mt-4">
+                        <div className="mb-4">
+                           <label className="block text-xs font-bold text-[#8e9297] uppercase mb-1">Username</label>
+                           <div className="text-white font-medium">{profile.username}</div>
+                        </div>
+                        <div>
+                           <label className="block text-xs font-bold text-[#8e9297] uppercase mb-1">Bio</label>
+                           <textarea 
+                              className="w-full bg-[#202225] text-white p-2 rounded border border-black/30 focus:border-[#5865F2] outline-none text-sm resize-none" 
+                              rows="3"
+                              defaultValue={profile.bio}
+                              onBlur={(e) => {
+                                updateProfile({ bio: e.target.value });
+                              }}
+                              placeholder="Tell everyone a little about yourself..."
+                           />
+                        </div>
                       </div>
+
                     </div>
                   </div>
 
