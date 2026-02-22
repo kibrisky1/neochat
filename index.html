@@ -83,7 +83,7 @@
     import { createClient } from '@supabase/supabase-js';
     import { 
       Hash, Search, Bell, Users, Plus, Compass, Settings, 
-      Mic, MicOff, Headphones, Send, Paperclip, X, Check, LogOut, User, Database, Mail, Lock, Menu, AlertCircle, ShieldBan, MessageSquare, Monitor, Image as ImageIcon, Trash2
+      Mic, MicOff, Headphones, Send, Paperclip, X, Check, LogOut, User, Database, Mail, Lock, Menu, AlertCircle, ShieldBan, MessageSquare, Monitor, Image as ImageIcon, Trash2, UserPlus, UserMinus, UserCheck, UserX
     } from 'lucide-react';
 
     // ==========================================
@@ -99,7 +99,6 @@
     // --- Helper Functions ---
     const generateId = (prefix) => prefix + "_" + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
     
-    // Generates a color avoiding blue
     const getPalette = (seed) => {
         const palettes = ['#ef4444', '#f97316', '#f59e0b', '#10b981', '#22c55e', '#8b5cf6', '#d946ef', '#f43f5e', '#a855f7'];
         if (!seed) return palettes[0];
@@ -262,7 +261,7 @@
         return data.messages.filter(m => m.channelId === activeChannelId).sort((a, b) => a.timestamp - b.timestamp);
       }, [data.messages, activeChannelId]);
 
-      // All DMs (with latest activity mapping)
+      // All Accepted DMs (with latest activity mapping)
       const allDMs = useMemo(() => {
           if (!profile) return [];
           return data.channels.filter(c => c.serverId === 'dm' && c.name.includes(profile.uid)).map(c => {
@@ -282,6 +281,18 @@
               return c.latestActivity > closedAt; // Reappears if new message is sent
           });
       }, [allDMs, closedDMs]);
+
+      // Pending Friend Requests
+      const pendingRequests = useMemo(() => {
+          if (!profile) return [];
+          return data.channels.filter(c => c.serverId === 'request' && c.name.includes(profile.uid)).map(c => {
+              const [uid1, uid2] = c.name.split('_');
+              const isOutgoing = uid1 === profile.uid;
+              const otherUid = isOutgoing ? uid2 : uid1;
+              const otherUser = data.users.find(u => u.uid === otherUid) || getDeletedUser(otherUid);
+              return { ...c, targetUser: otherUser, isOutgoing };
+          }).sort((a,b) => b.createdAt - a.createdAt);
+      }, [data.channels, data.users, profile]);
 
       const searchResults = useMemo(() => {
           if (!searchQuery.trim()) return [];
@@ -348,21 +359,50 @@
         showToast("Logged out successfully.", "success");
       };
 
-      // --- Chat Actions ---
+      // --- Friend & DM Actions ---
+      const handleSendRequest = async (targetUser) => {
+          if (!profile || !targetUser) return;
+          const reqName = `${profile.uid}_${targetUser.uid}`;
+          const newReq = { id: generateId('chan'), serverId: 'request', name: reqName, createdAt: Date.now() };
+          setData(prev => ({ ...prev, channels: [...prev.channels, newReq] }));
+          await supabase.from('channels').insert(newReq);
+          showToast(`Friend request sent to ${targetUser.username}!`, "success");
+      };
+
+      const handleAcceptRequest = async (channelId, targetUser) => {
+          const uids = [profile.uid, targetUser.uid].sort();
+          const dmName = uids.join('_');
+          setData(prev => ({ ...prev, channels: prev.channels.map(c => c.id === channelId ? { ...c, serverId: 'dm', name: dmName } : c) }));
+          await supabase.from('channels').update({ serverId: 'dm', name: dmName }).eq('id', channelId);
+          showToast(`You are now friends with ${targetUser.username}!`, "success");
+      };
+
+      const handleRemoveFriendOrRequest = async (channelId) => {
+          setData(prev => ({ ...prev, channels: prev.channels.filter(c => c.id !== channelId) }));
+          await supabase.from('channels').delete().eq('id', channelId);
+          if (activeChannelId === channelId) {
+              setActiveChannelId(null);
+              setContext('home');
+          }
+      };
+
       const handleStartDM = async (targetUser) => {
-        if (!profile || !targetUser) return;
+        if (!profile || !targetUser || targetUser.isDeleted) return;
         const uids = [profile.uid, targetUser.uid].sort();
         const dmName = uids.join('_');
         let dmChannel = data.channels.find(c => c.serverId === 'dm' && c.name === dmName);
         
         if (!dmChannel) {
-            const newChannel = { id: generateId('chan'), serverId: 'dm', name: dmName, createdAt: Date.now() };
-            setData(prev => ({ ...prev, channels: [...prev.channels, newChannel] }));
-            await supabase.from('channels').insert(newChannel);
-            dmChannel = newChannel;
+            // Check if there is a pending request to accept instead
+            const pendingReq = data.channels.find(c => c.serverId === 'request' && (c.name === `${profile.uid}_${targetUser.uid}` || c.name === `${targetUser.uid}_${profile.uid}`));
+            if (pendingReq) {
+                await handleAcceptRequest(pendingReq.id, targetUser);
+                dmChannel = { ...pendingReq, serverId: 'dm', name: dmName };
+            } else {
+                return showToast("You must be friends to send a direct message.", "error");
+            }
         }
 
-        // Revive DM if it was closed
         if (closedDMs[dmChannel.id]) {
             const newClosed = { ...closedDMs };
             delete newClosed[dmChannel.id];
@@ -381,18 +421,28 @@
           if (activeChannelId === channelId) setActiveChannelId(null);
       };
 
-      const handleAddFriend = async (e) => {
+      const handleAddFriendSubmit = async (e) => {
           e.preventDefault();
           const targetUsername = e.target.friend_username.value.trim().toLowerCase();
           if (!targetUsername) return;
           if (targetUsername === profile.username.toLowerCase()) return showToast("You cannot add yourself.", "error");
           
           const target = data.users.find(u => u.username.toLowerCase() === targetUsername);
-          if (!target) return showToast("User not found.", "error");
-          await handleStartDM(target);
-          showToast(`Added ${target.username} to your DMs!`, "success");
+          if (!target) return showToast("User not found. Check the exact username.", "error");
+
+          const sortedUids = [profile.uid, target.uid].sort().join('_');
+          if (data.channels.find(c => c.serverId === 'dm' && c.name === sortedUids)) {
+              return showToast("You are already friends.", "info");
+          }
+          if (data.channels.find(c => c.serverId === 'request' && (c.name === `${profile.uid}_${target.uid}` || c.name === `${target.uid}_${profile.uid}`))) {
+              return showToast("A friend request already exists.", "info");
+          }
+
+          await handleSendRequest(target);
+          e.target.reset();
       };
 
+      // --- Server Actions ---
       const handleCreateServer = async (e) => {
         e.preventDefault();
         const name = e.target.name.value.trim();
@@ -463,10 +513,20 @@
       // Admin Tools
       const adminDeleteUser = async (targetUid) => {
           if (!profile.isAdmin) return;
-          if (confirm("Are you sure you want to completely delete this user and their data?")) {
-             await supabase.from('users').delete().eq('uid', targetUid);
+          if (confirm("Are you sure you want to delete this user? Their account will be converted to a ghost profile.")) {
+             const ghostNum = Math.floor(1000 + Math.random() * 9000);
+             const ghostUpdates = {
+                 username: `deleted_user${ghostNum}`,
+                 nickname: `deleted_user${ghostNum}`,
+                 avatar: 'pfp.png',
+                 banner: '',
+                 bio: '',
+                 color: '#747f8d',
+                 isDeleted: true
+             };
+             await supabase.from('users').update(ghostUpdates).eq('uid', targetUid);
              setModals(m => ({ ...m, profile: null }));
-             showToast("User deleted.", "success");
+             showToast("User deleted and converted to ghost.", "success");
           }
       };
       
@@ -484,17 +544,19 @@
           showToast("User banned.", "success");
       };
 
-      const switchContext = (ctx, id = null) => {
-        setContext(ctx);
-        if (ctx === 'server') {
-          setActiveServerId(id);
-          const firstChannel = data.channels.find(c => c.serverId === id);
-          if (firstChannel) setActiveChannelId(firstChannel.id);
-        } else { setActiveServerId(null); setActiveChannelId(null); }
-        setLeftMenuOpen(false);
+      // Profile Modal Utilities
+      const getRelationshipStatus = (targetUid) => {
+          if (!profile) return null;
+          if (targetUid === profile.uid) return 'self';
+          const sorted = [profile.uid, targetUid].sort().join('_');
+          const isFriend = data.channels.find(c => c.serverId === 'dm' && c.name === sorted);
+          if (isFriend) return { type: 'friend', channel: isFriend };
+          const pending = data.channels.find(c => c.serverId === 'request' && (c.name === `${profile.uid}_${targetUid}` || c.name === `${targetUid}_${profile.uid}`));
+          if (pending) return { type: 'pending', channel: pending, isOutgoing: pending.name.startsWith(profile.uid) };
+          return { type: 'none' };
       };
 
-      // --- Loading & Auth Screen ---
+      // --- UI States ---
       if (isLoading) return <div className="flex h-screen w-full items-center justify-center bg-[var(--bg-base)] text-white font-bold text-xl animate-pulse">Connecting...</div>;
 
       if (!profile) {
@@ -556,14 +618,14 @@
          }
       }
 
+      const pendingIncomingCount = pendingRequests.filter(r => !r.isOutgoing).length;
+
       // --- Main Layout ---
       return (
         <div className="flex h-screen w-full bg-[var(--bg-base)] text-[var(--text-main)] font-sans overflow-hidden selection:bg-[#5865F2]/50 relative">
           
-          {/* Toast Notifications */}
           {toast && <div className={"fixed top-5 right-5 z-[200] px-6 py-4 rounded-lg shadow-2xl font-semibold flex items-center gap-3 animate-in slide-in-from-right-10 duration-300 text-white " + (toast.type === 'success' ? 'bg-[#3ba55c]' : 'bg-[#ed4245]')}><Check size={20} />{toast.message}</div>}
 
-          {/* Fullscreen Image Modal */}
           {imageView && (
             <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[150] p-4 cursor-pointer" onClick={() => setImageView(null)}>
               <img src={imageView} className="max-w-full max-h-full object-contain cursor-default" alt="Fullscreen view" onClick={e => e.stopPropagation()} />
@@ -583,6 +645,7 @@
               <button type="button" onClick={() => switchContext('home')} className={"relative w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-[var(--bg-panel)] flex items-center justify-center transition-all duration-200 group shrink-0 " + (context === 'home' ? 'bg-[#5865F2] rounded-[16px] text-white' : 'text-[var(--text-main)] hover:bg-[#5865F2] hover:text-white')}>
                 <div className={"absolute left-[-12px] w-2 bg-white rounded-r-full transition-all duration-200 " + (context === 'home' ? 'h-10 opacity-100' : 'h-5 opacity-0 group-hover:opacity-100')} />
                 <div className="w-full h-full flex items-center justify-center p-2 rounded-inherit"><img src="logo.png" alt="Home" className="w-full h-full object-contain" onError={(e) => { e.target.onerror = null; e.target.src = 'pfp.png'; }} /></div>
+                {pendingIncomingCount > 0 && <span className="absolute -top-1 -right-1 bg-[#ed4245] text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full border-2 border-[var(--bg-rail)]">{pendingIncomingCount}</span>}
               </button>
               
               <div className="w-8 h-[2px] bg-[var(--bg-sidebar)] rounded my-1 shrink-0" />
@@ -695,6 +758,9 @@
                     <div className="flex items-center gap-4 text-[var(--text-muted)] text-sm font-medium overflow-x-auto hide-scrollbar">
                         <button type="button" className={homeTab === 'online' ? 'text-[var(--text-main)]' : 'hover:text-[var(--text-main)]'} onClick={() => setHomeTab('online')}>Online</button>
                         <button type="button" className={homeTab === 'all' ? 'text-[var(--text-main)]' : 'hover:text-[var(--text-main)]'} onClick={() => setHomeTab('all')}>All</button>
+                        <button type="button" className={homeTab === 'pending' ? 'text-[var(--text-main)] flex items-center gap-1' : 'hover:text-[var(--text-main)] flex items-center gap-1'} onClick={() => setHomeTab('pending')}>
+                            Pending {pendingIncomingCount > 0 && <span className="bg-[#ed4245] text-white text-[10px] px-1.5 py-0.5 rounded-full leading-none">{pendingIncomingCount}</span>}
+                        </button>
                         <button type="button" className={homeTab === 'add' ? 'bg-[#3ba55c] text-white px-2 py-0.5 rounded' : 'text-[#3ba55c] hover:bg-[#3ba55c]/20 px-2 py-0.5 rounded'} onClick={() => setHomeTab('add')}>Add Friend</button>
                     </div>
                     <div className="flex items-center gap-3 md:gap-4 text-[var(--text-muted)] shrink-0 ml-auto relative">
@@ -709,13 +775,41 @@
                         <div className="w-full max-w-2xl mt-4">
                             <h2 className="text-[var(--text-main)] font-bold text-lg mb-2">ADD FRIEND</h2>
                             <p className="text-[var(--text-faded)] text-sm mb-4">You can add a friend with their exact NeoChat Username.</p>
-                            <form onSubmit={handleAddFriend} className="flex items-center bg-[var(--bg-base)] border border-[var(--border-dark)] focus-within:border-[#5865F2] rounded-lg p-2 gap-3 transition-colors">
+                            <form onSubmit={handleAddFriendSubmit} className="flex items-center bg-[var(--bg-base)] border border-[var(--border-dark)] focus-within:border-[#5865F2] rounded-lg p-2 gap-3 transition-colors">
                                 <input type="text" name="friend_username" placeholder="Exact username" className="flex-1 bg-transparent text-[var(--text-main)] placeholder-[var(--text-faded)] outline-none px-3 py-2" autoComplete="off" />
                                 <button type="submit" className="bg-[#5865F2] hover:bg-[#4752c4] text-white px-6 py-2 rounded font-medium transition-colors text-sm">Send Friend Request</button>
                             </form>
                             <div className="mt-10 border-t border-[var(--border-light)] pt-10 text-center">
                                 <img src="pfp.png" className="w-48 h-48 mx-auto opacity-10 filter grayscale object-contain" alt="Empty" />
                                 <p className="text-[var(--text-faded)] mt-4">Wumpus is waiting on friends. You don't have to though!</p>
+                            </div>
+                        </div>
+                    ) : homeTab === 'pending' ? (
+                        <div className="w-full max-w-3xl">
+                            <h2 className="text-[var(--text-faded)] font-bold text-xs uppercase tracking-wider mb-4 border-b border-[var(--border-light)] pb-4">
+                                PENDING REQUESTS — {pendingRequests.length}
+                            </h2>
+                            {pendingRequests.length === 0 && <div className="text-center text-[var(--text-faded)] mt-20">No pending friend requests.</div>}
+                            <div className="flex flex-col">
+                                {pendingRequests.map(req => (
+                                    <div key={req.id} className="flex items-center justify-between p-3 border-t border-[var(--border-light)] hover:bg-[var(--bg-sidebar)] rounded transition-colors group cursor-pointer" onClick={() => setModals(m => ({ ...m, profile: req.targetUser }))}>
+                                        <div className="flex items-center gap-3">
+                                            <div className="relative shrink-0 w-10 h-10">
+                                               <img src={req.targetUser.avatar || 'pfp.png'} className={"w-10 h-10 rounded-full object-cover bg-[var(--bg-input)] " + (req.targetUser.isDeleted ? 'opacity-50 grayscale' : '')} style={getAvatarStyle(req.targetUser.avatar, req.targetUser.username)} />
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="font-bold text-[var(--text-main)]">{req.targetUser.nickname || req.targetUser.username}</span>
+                                                <span className="text-xs text-[var(--text-faded)]">{req.isOutgoing ? 'Outgoing Friend Request' : 'Incoming Friend Request'}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {!req.isOutgoing && (
+                                                <button type="button" onClick={(e) => { e.stopPropagation(); handleAcceptRequest(req.id, req.targetUser); }} className="p-2 bg-[var(--bg-input)] hover:bg-[#3ba55c] text-[var(--text-muted)] hover:text-white rounded-full transition-colors" title="Accept"><Check size={18} /></button>
+                                            )}
+                                            <button type="button" onClick={(e) => { e.stopPropagation(); handleRemoveFriendOrRequest(req.id); }} className="p-2 bg-[var(--bg-input)] hover:bg-[#ed4245] text-[var(--text-muted)] hover:text-white rounded-full transition-colors" title={req.isOutgoing ? "Cancel" : "Decline"}><X size={18} /></button>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     ) : (
@@ -872,16 +966,19 @@
                      <img src={activeChannelInfo.avatar || 'pfp.png'} className={"w-full h-full rounded-full object-cover bg-[var(--bg-input)] " + (activeChannelInfo.targetUser?.isDeleted ? 'opacity-50 grayscale' : '')} style={getAvatarStyle(activeChannelInfo.avatar, activeChannelInfo.name)} />
                      {!activeChannelInfo.targetUser?.isDeleted && <div className={"absolute bottom-1 right-1 w-5 h-5 border-[3px] border-[var(--bg-sidebar)] rounded-full " + (isOnline(activeChannelInfo.targetUser?.lastActive) ? 'bg-[#3ba55c]' : 'bg-[#747f8d]')} />}
                   </div>
-                  <div className="text-xl font-bold text-[var(--text-main)] flex items-center gap-2 flex-wrap">
-                      {activeChannelInfo.name}
-                      {activeChannelInfo.targetUser?.isAdmin && <span className="bg-amber-400 text-black text-[10px] px-1.5 py-0.5 rounded-sm tracking-wider h-fit">ADMIN</span>}
+                  <div className="mt-2">
+                      <div className="text-xl font-bold text-[var(--text-main)] flex items-center gap-2 flex-wrap">
+                          {activeChannelInfo.name}
+                          {activeChannelInfo.targetUser?.isAdmin && <span className="bg-amber-400 text-black text-[10px] px-1.5 py-0.5 rounded-sm tracking-wider h-fit">ADMIN</span>}
+                      </div>
+                      <div className="text-sm text-[var(--text-muted)]">{activeChannelInfo.targetUser?.nickname ? `${activeChannelInfo.targetUser.username} ` : ''}#{activeChannelInfo.targetUser?.uid.substring(0,6)}</div>
                   </div>
-                  <div className="text-sm text-[var(--text-muted)]">{activeChannelInfo.targetUser?.nickname ? `${activeChannelInfo.targetUser.username} ` : ''}#{activeChannelInfo.targetUser?.uid.substring(0,6)}</div>
-                  <hr className="my-3 border-[var(--border-light)]" />
-                  <div className="text-xs font-bold text-[var(--text-faded)] uppercase mb-1">About Me</div>
-                  <div className="text-sm text-[var(--text-main)] break-words whitespace-pre-wrap">{activeChannelInfo.targetUser?.bio || "This user hasn't set a bio yet."}</div>
-                  <div className="text-xs font-bold text-[var(--text-faded)] uppercase mb-1 mt-4">NeoChat Member Since</div>
-                  <div className="text-sm text-[var(--text-main)]">{activeChannelInfo.targetUser?.isDeleted ? 'Account Deleted' : new Date(activeChannelInfo.targetUser?.lastActive || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                  <div className="bg-[var(--bg-rail)] rounded-lg p-3 border border-[var(--border-light)] mt-4">
+                      <div className="text-xs font-bold text-[var(--text-faded)] uppercase mb-1">About Me</div>
+                      <div className="text-sm text-[var(--text-main)] break-words whitespace-pre-wrap">{activeChannelInfo.targetUser?.bio || "This user hasn't set a bio yet."}</div>
+                      <div className="text-xs font-bold text-[var(--text-faded)] uppercase mb-1 mt-4">NeoChat Member Since</div>
+                      <div className="text-sm text-[var(--text-main)]">{activeChannelInfo.targetUser?.isDeleted ? 'Account Deleted' : new Date(activeChannelInfo.targetUser?.lastActive || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                  </div>
                </div>
             </div>
           ) : null}
@@ -1013,39 +1110,66 @@
               <div className="w-full max-w-[340px] bg-[var(--bg-userpanel)] rounded-lg shadow-2xl overflow-visible border border-[var(--border-dark)] animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
                 <div className="h-24 relative shrink-0 rounded-t-lg bg-[#5865F2]" style={{ backgroundColor: modals.profile.color || '#5865F2', backgroundImage: modals.profile.banner ? `url(${modals.profile.banner})` : 'none', backgroundSize: 'cover', backgroundPosition: 'center' }} />
                 <div className="px-4 pb-4 relative pt-14">
-                  <div className="absolute -top-12 left-4 rounded-full border-[6px] border-[var(--bg-userpanel)] bg-[var(--bg-userpanel)] w-[92px] h-[92px] shrink-0 z-10">
+                  <div className="absolute -top-[42px] left-4 rounded-full border-[6px] border-[var(--bg-userpanel)] bg-[var(--bg-userpanel)] w-[84px] h-[84px] shrink-0 z-10">
                     <img src={modals.profile.avatar || 'pfp.png'} className={"w-full h-full rounded-full object-cover bg-[var(--bg-input)] " + (modals.profile.isDeleted ? 'opacity-50 grayscale' : '')} alt="User Avatar" style={getAvatarStyle(modals.profile.avatar, modals.profile.username)} />
-                    {!modals.profile.isDeleted && <div className={"absolute bottom-1 right-1 w-5 h-5 border-[3px] border-[var(--bg-userpanel)] rounded-full " + (isOnline(modals.profile.lastActive) ? 'bg-[#3ba55c]' : 'bg-[#747f8d]')} />}
+                    {!modals.profile.isDeleted && <div className={"absolute bottom-0.5 right-0.5 w-4 h-4 border-[3px] border-[var(--bg-userpanel)] rounded-full " + (isOnline(modals.profile.lastActive) ? 'bg-[#3ba55c]' : 'bg-[#747f8d]')} />}
                   </div>
                   
-                  <div className="bg-[var(--bg-rail)] rounded-lg p-3 border border-[var(--border-light)] mt-2">
+                  <div className="mt-2">
                     <div className="text-xl font-bold text-[var(--text-main)] flex items-center gap-2 flex-wrap">
                       {modals.profile.nickname || modals.profile.username}
                       {modals.profile.isAdmin && <span className="bg-amber-400 text-black text-[10px] px-1.5 py-0.5 rounded-sm tracking-wider h-fit">ADMIN</span>}
                     </div>
                     <div className="text-sm text-[var(--text-muted)]">{modals.profile.nickname ? `${modals.profile.username} ` : ''}#{modals.profile.uid.substring(0,6)}</div>
-                    <hr className="my-3 border-[var(--border-light)]" />
+                  </div>
+
+                  <div className="bg-[var(--bg-rail)] rounded-lg p-3 border border-[var(--border-light)] mt-4">
                     <div className="text-xs font-bold text-[var(--text-faded)] uppercase mb-1">About Me</div>
                     <div className="text-sm text-[var(--text-main)] break-words whitespace-pre-wrap max-h-24 overflow-y-auto hide-scrollbar">{modals.profile.bio || "This user hasn't set a bio yet."}</div>
                     <div className="text-xs font-bold text-[var(--text-faded)] uppercase mb-1 mt-4">NeoChat Member Since</div>
                     <div className="text-sm text-[var(--text-main)]">{modals.profile.isDeleted ? 'Account Deleted' : new Date(modals.profile.lastActive || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
                   </div>
 
-                  {modals.profile.uid === profile.uid ? (
-                    <button type="button" onClick={() => setModals(m => ({ ...m, profile: null, settings: true }))} className="w-full bg-[var(--bg-sidebar)] hover:bg-[var(--border-light)] text-white py-2 rounded text-sm font-medium transition-colors border border-[var(--border-dark)]">Edit User Profile</button>
-                  ) : !modals.profile.isDeleted ? (
-                    <div className="flex gap-2 relative">
-                      <button type="button" onClick={() => handleStartDM(modals.profile)} className="flex-1 bg-[#5865F2] hover:bg-[#4752c4] text-white py-2 rounded text-sm font-medium transition-colors">Send Message</button>
-                      <button type="button" onClick={() => setProfileMenuOpen(!profileMenuOpen)} className="bg-[var(--bg-sidebar)] hover:bg-[var(--border-light)] border border-[var(--border-dark)] px-3 rounded transition-colors text-white flex items-center justify-center shrink-0"><span className="font-bold tracking-widest leading-none block transform -translate-y-1">...</span></button>
+                  {(() => {
+                      // Profile Actions Logic
+                      const isSelf = modals.profile.uid === profile.uid;
+                      const sortedUids = [profile.uid, modals.profile.uid].sort().join('_');
+                      const isFriend = data.channels.find(c => c.serverId === 'dm' && c.name === sortedUids);
+                      const pendingReq = data.channels.find(c => c.serverId === 'request' && (c.name === `${profile.uid}_${modals.profile.uid}` || c.name === `${modals.profile.uid}_${profile.uid}`));
+                      const isOutgoingReq = pendingReq && pendingReq.name.startsWith(profile.uid);
 
-                      {profileMenuOpen && (
-                         <div className="absolute bottom-full right-0 mb-2 w-48 bg-[#18191c] rounded shadow-xl border border-[var(--border-light)] py-1 z-[110]">
-                            <button type="button" className="w-full text-left px-3 py-2 text-sm text-[#ed4245] hover:bg-[#ed4245] hover:text-white transition-colors flex items-center gap-2" onClick={() => { showToast(`You blocked ${modals.profile.username}.`, "error"); setProfileMenuOpen(false); }}><ShieldBan size={14} /> Block User</button>
-                            <button type="button" className="w-full text-left px-3 py-2 text-sm text-[#ed4245] hover:bg-[#ed4245] hover:text-white transition-colors flex items-center gap-2" onClick={() => { showToast(`Reported ${modals.profile.username}.`, "error"); setProfileMenuOpen(false); }}><AlertCircle size={14} /> Report User</button>
-                         </div>
-                      )}
-                    </div>
-                  ) : null}
+                      if (isSelf) {
+                          return <button type="button" onClick={() => setModals(m => ({ ...m, profile: null, settings: true }))} className="mt-4 w-full bg-[var(--bg-sidebar)] hover:bg-[var(--border-light)] text-[var(--text-main)] py-2 rounded text-sm font-medium transition-colors border border-[var(--border-dark)]">Edit User Profile</button>;
+                      } else if (modals.profile.isDeleted) {
+                          return null; // No actions for deleted user
+                      } else if (isFriend) {
+                          return (
+                              <div className="flex gap-2 relative mt-4">
+                                <button type="button" onClick={() => handleStartDM(modals.profile)} className="flex-1 bg-[#5865F2] hover:bg-[#4752c4] text-white py-2 rounded text-sm font-medium transition-colors">Send Message</button>
+                                <button type="button" onClick={() => setProfileMenuOpen(!profileMenuOpen)} className="bg-[var(--bg-sidebar)] hover:bg-[var(--border-light)] border border-[var(--border-dark)] px-3 rounded transition-colors text-[var(--text-main)] flex items-center justify-center shrink-0"><span className="font-bold tracking-widest leading-none block transform -translate-y-1">...</span></button>
+                                {profileMenuOpen && (
+                                   <div className="absolute bottom-full right-0 mb-2 w-48 bg-[#18191c] rounded shadow-xl border border-[var(--border-light)] py-1 z-[110]">
+                                      <button type="button" className="w-full text-left px-3 py-2 text-sm text-[var(--text-main)] hover:bg-[#ed4245] hover:text-white transition-colors flex items-center gap-2" onClick={() => { handleRemoveFriendOrRequest(isFriend.id); setProfileMenuOpen(false); setModals(m=>({...m, profile: null})); }}><UserMinus size={14} /> Remove Friend</button>
+                                      <button type="button" className="w-full text-left px-3 py-2 text-sm text-[#ed4245] hover:bg-[#ed4245] hover:text-white transition-colors flex items-center gap-2" onClick={() => { showToast(`You blocked ${modals.profile.username}.`, "error"); setProfileMenuOpen(false); }}><ShieldBan size={14} /> Block User</button>
+                                   </div>
+                                )}
+                              </div>
+                          );
+                      } else if (pendingReq) {
+                          if (isOutgoingReq) {
+                              return <button type="button" onClick={() => handleRemoveFriendOrRequest(pendingReq.id)} className="mt-4 w-full bg-[var(--bg-sidebar)] hover:bg-[var(--border-light)] text-[var(--text-main)] py-2 rounded text-sm font-medium transition-colors border border-[var(--border-dark)] flex justify-center items-center gap-2"><UserX size={16}/> Cancel Request</button>;
+                          } else {
+                              return (
+                                  <div className="flex gap-2 mt-4">
+                                      <button type="button" onClick={() => handleAcceptRequest(pendingReq.id, modals.profile)} className="flex-1 bg-[#3ba55c] hover:bg-[#2d8046] text-white py-2 rounded text-sm font-medium transition-colors flex justify-center items-center gap-2"><UserCheck size={16}/> Accept</button>
+                                      <button type="button" onClick={() => handleRemoveFriendOrRequest(pendingReq.id)} className="flex-1 bg-[var(--bg-sidebar)] hover:bg-[#ed4245] text-[var(--text-main)] hover:text-white py-2 rounded text-sm font-medium transition-colors border border-[var(--border-dark)] hover:border-[#ed4245]">Decline</button>
+                                  </div>
+                              );
+                          }
+                      } else {
+                          return <button type="button" onClick={() => handleSendRequest(modals.profile)} className="mt-4 w-full bg-[#5865F2] hover:bg-[#4752c4] text-white py-2 rounded text-sm font-medium transition-colors flex justify-center items-center gap-2"><UserPlus size={16}/> Send Friend Request</button>;
+                      }
+                  })()}
 
                   {/* ADMIN TOOLS */}
                   {profile.isAdmin && !modals.profile.isDeleted && modals.profile.uid !== profile.uid && (
@@ -1055,7 +1179,7 @@
                            <button type="button" onClick={() => adminBanUser(modals.profile.uid)} className="flex-1 bg-[#ed4245]/20 hover:bg-[#ed4245] text-[#ed4245] hover:text-white py-1.5 rounded text-xs font-bold transition-colors">Ban User</button>
                            <button type="button" onClick={() => adminClearMessages(modals.profile.uid)} className="flex-1 bg-[#ed4245]/20 hover:bg-[#ed4245] text-[#ed4245] hover:text-white py-1.5 rounded text-xs font-bold transition-colors">Purge Chat</button>
                         </div>
-                        <button type="button" onClick={() => adminDeleteUser(modals.profile.uid)} className="w-full mt-2 bg-transparent border border-[#ed4245] hover:bg-[#ed4245] text-[#ed4245] hover:text-white py-1.5 rounded text-xs font-bold transition-colors flex items-center justify-center gap-2"><Trash2 size={14}/> Wipe Account Data</button>
+                        <button type="button" onClick={() => adminDeleteUser(modals.profile.uid)} className="w-full mt-2 bg-transparent border border-[#ed4245] hover:bg-[#ed4245] text-[#ed4245] hover:text-white py-1.5 rounded text-xs font-bold transition-colors flex items-center justify-center gap-2"><Trash2 size={14}/> Delete Account</button>
                      </div>
                   )}
                 </div>
@@ -1091,14 +1215,14 @@
                           <h2 className="text-xl font-bold text-[var(--text-main)] mb-6">My Account</h2>
                           <div className="bg-[var(--bg-sidebar)] rounded-xl mb-6 border border-[var(--border-light)] overflow-hidden">
                             <div className="h-24 relative" style={{ backgroundColor: profile.color || '#5865F2', backgroundImage: profile.banner ? `url(${profile.banner})` : 'none', backgroundSize: 'cover', backgroundPosition: 'center' }} />
-                            <div className="px-4 md:px-6 pb-6 relative pt-16">
-                              <div className="absolute -top-12 left-4 md:left-6 w-[96px] h-[96px] rounded-full border-[6px] border-[var(--bg-sidebar)] bg-[var(--bg-input)] z-10 flex items-center justify-center overflow-hidden">
+                            <div className="px-4 md:px-6 pb-6 relative pt-14">
+                              <div className="absolute -top-[42px] left-4 md:left-6 w-[84px] h-[84px] rounded-full border-[6px] border-[var(--bg-sidebar)] bg-[var(--bg-input)] z-10 flex items-center justify-center overflow-hidden">
                                  <img src={profile.avatar || 'pfp.png'} className="w-full h-full object-cover" alt="Avatar" style={getAvatarStyle(profile.avatar, profile.username)} />
                               </div>
                               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mt-2">
                                 <div className="flex-1">
-                                   <h3 className="text-xl font-bold text-[var(--text-main)] leading-none mb-1">{profile.username}</h3>
-                                   <span className="text-sm text-[var(--text-muted)]">#{profile.uid.substring(0,4)}</span>
+                                   <h3 className="text-xl font-bold text-[var(--text-main)] leading-none mb-1">{profile.nickname || profile.username}</h3>
+                                   <span className="text-sm text-[var(--text-muted)]">{profile.nickname ? `${profile.username} ` : ''}#{profile.uid.substring(0,4)}</span>
                                 </div>
                                 <button type="button" onClick={() => setSettingsTab('profiles')} className="bg-[#5865F2] hover:bg-[#4752c4] text-white px-5 py-2 rounded text-sm font-medium transition-colors">Edit Profile</button>
                               </div>
