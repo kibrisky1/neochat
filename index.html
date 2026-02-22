@@ -505,6 +505,15 @@
         await supabase.from('messages').update({ reactions: rxns }).eq('id', msgId);
       };
 
+      const handleDeleteMessage = async (msgId) => {
+          if (confirm("Are you sure you want to delete this message?")) {
+              // Optimistically remove it from UI instantly
+              setData(prev => ({ ...prev, messages: prev.messages.filter(m => m.id !== msgId) }));
+              // Delete from Supabase
+              await supabase.from('messages').delete().eq('id', msgId);
+          }
+      };
+
       const updateProfile = async (updates) => {
         setData(prev => ({ ...prev, users: prev.users.map(u => u.uid === profile.uid ? { ...u, ...updates } : u) }));
         await supabase.from('users').update(updates).eq('id', profile.id);
@@ -908,10 +917,15 @@
                         </div>
 
                         {/* Quick Reactions Hover Bar */}
-                        <div className="absolute right-4 -mt-3 hidden group-hover:flex items-center bg-[var(--bg-panel)] border border-[var(--border-dark)] rounded shadow-sm px-1 py-0.5">
+                        <div className="absolute right-4 -mt-3 hidden group-hover:flex items-center bg-[var(--bg-panel)] border border-[var(--border-dark)] rounded shadow-sm px-1 py-0.5 z-10">
                           {['👍', '❤️', '😂', '😮'].map(emoji => (
                             <button type="button" key={emoji} onClick={() => toggleReaction(msg.id, emoji, msg.reactions || {})} className="p-1 hover:bg-[var(--border-light)] rounded text-lg grayscale hover:grayscale-0 transition-all hover:scale-110">{emoji}</button>
                           ))}
+                          {(profile.uid === msg.senderId || profile.isAdmin) && (
+                            <button type="button" onClick={() => handleDeleteMessage(msg.id)} className="p-1.5 ml-1 text-[var(--text-faded)] hover:text-white hover:bg-[#ed4245] rounded transition-colors" title="Delete Message">
+                              <Trash2 size={16} />
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
