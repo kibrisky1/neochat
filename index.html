@@ -491,7 +491,7 @@ const Avatar = memo(({ user, size = 32, showStatus = false, className = '' }) =>
         alt={user?.username || 'User'}
         style={{ ...sz, ...getAvatarStyle(user?.avatar, user?.username) }}
         className={`rounded-full object-cover bg-[var(--bg-input)] ${user?.isDeleted ? 'opacity-50 grayscale' : ''}`}
-        onError={e => { e.target.onerror = null; e.target.src = ''; e.target.style.backgroundColor = getPalette(user?.username); }}
+        onError={e => { e.target.onerror = null; e.target.src = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs='; e.target.style.backgroundColor = getPalette(user?.username); }}
       />
       {showStatus && (
         <div
@@ -1519,25 +1519,25 @@ function App() {
   const [closedDMs,       setClosedDMs]       = useState(() => JSON.parse(localStorage.getItem('neo_closed_dms') || '{}'));
 
   // ─── UI state ───────────────────────────────────────────────────────────────
-  const [leftOpen,            setLeftOpen]            = useState(false);
-  const [membersSidebarOpen,  setMembersSidebarOpen]  = useState(false);
-  const [dmSidebarOpen,       setDmSidebarOpen]       = useState(true);
-  const [profileModal,        setProfileModal]        = useState(null);
-  const [settingsOpen,        setSettingsOpen]        = useState(false);
-  const [settingsTab,         setSettingsTab]         = useState('account');
-  const [imageView,           setImageView]           = useState(null);
-  const [editingMsg,          setEditingMsg]          = useState(null);
-  const [searchQuery,         setSearchQuery]         = useState('');
-  const [showSearch,          setShowSearch]          = useState(false);
-  const [showNotifs,          setShowNotifs]          = useState(false);
-  const [showCreateServer,    setShowCreateServer]    = useState(false);
-  const [showCreateChannel,   setShowCreateChannel]   = useState(false);
-  const [showServerSettings,  setShowServerSettings]  = useState(false);
-  const [atBottom,            setAtBottom]            = useState(true);
-  const [unreadCounts,        setUnreadCounts]        = useState({});
-  const [typers,              setTypers]              = useState([]); // placeholder
-  const [micMuted,            setMicMuted]            = useState(false);
-  const [deafened,            setDeafened]            = useState(false);
+  const [leftOpen,             setLeftOpen]             = useState(false);
+  const [membersSidebarOpen,   setMembersSidebarOpen]   = useState(false);
+  const [dmSidebarOpen,        setDmSidebarOpen]        = useState(true);
+  const [profileModal,         setProfileModal]         = useState(null);
+  const [settingsOpen,         setSettingsOpen]         = useState(false);
+  const [settingsTab,          setSettingsTab]          = useState('account');
+  const [imageView,            setImageView]            = useState(null);
+  const [editingMsg,           setEditingMsg]           = useState(null);
+  const [searchQuery,          setSearchQuery]          = useState('');
+  const [showSearch,           setShowSearch]           = useState(false);
+  const [showNotifs,           setShowNotifs]           = useState(false);
+  const [showCreateServer,     setShowCreateServer]     = useState(false);
+  const [showCreateChannel,    setShowCreateChannel]    = useState(false);
+  const [showServerSettings,   setShowServerSettings]   = useState(false);
+  const [atBottom,             setAtBottom]             = useState(true);
+  const [unreadCounts,         setUnreadCounts]         = useState({});
+  const [typers,               setTypers]               = useState([]); // placeholder
+  const [micMuted,             setMicMuted]             = useState(false);
+  const [deafened,             setDeafened]             = useState(false);
 
   const messagesEndRef  = useRef(null);
   const msgListRef      = useRef(null);
@@ -2604,6 +2604,7 @@ function App() {
               onSend={handleSendMessage}
               onCancelEdit={() => setEditingMsg(null)}
               onImageUpload={handleImageUpload}
+              onTyping={() => {}} 
             />
           </>
         )}
