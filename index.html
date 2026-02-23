@@ -955,24 +955,42 @@ function AuthScreen({ onToast }) {
         if (authData?.user) {
           // Create the profile row (works whether confirmed or not)
           const isDavid = username.toLowerCase().includes('david');
-          const { error: profileError } = await supabase.from('users').upsert({
+
+          // Build the profile — only include columns we know exist.
+          // If optional columns (banner, bio, color) are missing from your DB schema,
+          // they'll be skipped gracefully. Add them in Supabase Table Editor if needed.
+          const profileData = {
             id:         authData.user.id,
             uid:        authData.user.id,
             username,
             nickname:   username,
             avatar:     'pfp.png',
-            banner:     '',
             color:      getPalette(username),
-            bio:        '',
             isAdmin:    isDavid,
             isBanned:   false,
             status:     'online',
             lastActive: Date.now(),
+          };
+
+          // Attempt with optional columns first, fall back without them on schema errors
+          let { error: profileError } = await supabase.from('users').upsert({
+            ...profileData,
+            banner: '',
+            bio:    '',
           });
 
           if (profileError) {
-            // Profile insert failed but auth succeeded — non-fatal, user can still log in
-            console.warn('Profile upsert failed:', profileError.message);
+            const isSchemaErr = (profileError.message || '').toLowerCase().includes('could not find');
+            if (isSchemaErr) {
+              // Some columns missing from DB — retry with just the core fields
+              console.warn('Schema mismatch, retrying with core fields only:', profileError.message);
+              ({ error: profileError } = await supabase.from('users').upsert(profileData));
+            }
+            if (profileError) {
+              console.error('Profile upsert failed:', profileError.message);
+              // Non-fatal — auth succeeded, user can still log in.
+              // They'll just have an incomplete profile until columns are added.
+            }
           }
 
           if (!authData.session) {
@@ -1950,10 +1968,25 @@ function App() {
 
   const handleUpdateProfile = async (updates) => {
     if (!profile) return;
+    // Optimistic update locally
     setData(prev => ({ ...prev, users: prev.users.map(u => u.uid === profile.uid ? { ...u, ...updates } : u) }));
     const { error } = await supabase.from('users').update(updates).eq('id', profile.id);
-    if (error) showToast('Failed to save. ' + error.message, 'error');
-    else showToast('Profile updated!', 'success');
+    if (error) {
+      const isSchemaErr = (error.message || '').toLowerCase().includes('could not find');
+      if (isSchemaErr) {
+        // Column doesn't exist in DB yet — strip the unknown key and retry
+        const knownKeys = ['username','nickname','avatar','color','status','lastActive','bio','banner','isAdmin','isBanned','isDeleted'];
+        const safeUpdates = Object.fromEntries(Object.entries(updates).filter(([k]) => knownKeys.includes(k)));
+        // Try again without the offending column
+        const { error: e2 } = await supabase.from('users').update(safeUpdates).eq('id', profile.id);
+        if (e2) showToast('Save failed: ' + e2.message, 'error');
+        else showToast('Saved! (Tip: add missing columns to your DB for full features)', 'info');
+      } else {
+        showToast('Failed to save: ' + error.message, 'error');
+      }
+    } else {
+      showToast('Profile updated!', 'success');
+    }
   };
 
   // Admin
@@ -1970,7 +2003,12 @@ function App() {
   const adminDelete = async (uid) => {
     if (!profile?.isAdmin || !confirm('Delete this account? This cannot be undone.')) return;
     const n = Math.floor(1000 + Math.random() * 9000);
-    await supabase.from('users').update({ username: `deleted_user${n}`, nickname: `deleted_user${n}`, avatar: 'pfp.png', banner: '', bio: '', color: '#747f8d', isDeleted: true }).eq('uid', uid);
+    // Send only columns we know exist; banner/bio/color are optional
+    const ghostFields = { username: `deleted_user${n}`, nickname: `deleted_user${n}`, avatar: 'pfp.png', isDeleted: true };
+    const { error: delErr } = await supabase.from('users').update({ ...ghostFields, banner: '', bio: '', color: '#747f8d' }).eq('uid', uid);
+    if (delErr && (delErr.message || '').includes('could not find')) {
+      await supabase.from('users').update(ghostFields).eq('uid', uid);
+    }
     setProfileModal(null);
     showToast('User deleted.', 'success');
   };
